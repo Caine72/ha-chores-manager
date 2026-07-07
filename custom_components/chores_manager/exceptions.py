@@ -25,3 +25,12 @@ class InactiveChildrenError(ChoresManagerError):
         """Initialize the exception."""
         self.child_ids = child_ids
         super().__init__(", ".join(child_ids))
+
+
+class UnknownChoreError(ChoresManagerError):
+    """Raised when a chore ID does not exist."""
+
+    def __init__(self, chore_id: str) -> None:
+        """Initialize the exception."""
+        self.chore_id = chore_id
+        super().__init__(chore_id)

@@ -11,8 +11,10 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
+    ATTR_ACTIVE,
     ATTR_CATEGORY,
     ATTR_CHILD_IDS,
+    ATTR_CHORE_ID,
     ATTR_ICON,
     ATTR_NAME,
     ATTR_POINTS,
@@ -22,11 +24,13 @@ from .const import (
     DOMAIN,
     SERVICE_ADD_CHILD,
     SERVICE_ADD_CHORE,
+    SERVICE_SET_CHORE_ACTIVE,
 )
 from .exceptions import (
     InactiveChildrenError,
     NoActiveChildrenError,
     UnknownChildrenError,
+    UnknownChoreError,
 )
 from .models import ChoresManagerConfigEntry
 
@@ -75,6 +79,17 @@ ADD_CHORE_SCHEMA = vol.Schema(
             ],
             vol.Length(min=1),
         ),
+    }
+)
+
+SET_CHORE_ACTIVE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CHORE_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+        vol.Required(ATTR_ACTIVE): cv.boolean,
     }
 )
 
@@ -142,6 +157,24 @@ async def async_setup_services(
                 },
             ) from err
 
+    async def async_handle_set_chore_active(call: ServiceCall) -> None:
+        """Handle the set-chore-active action."""
+        entry = _get_loaded_entry(hass)
+
+        try:
+            await entry.runtime_data.async_set_chore_active(
+                call.data[ATTR_CHORE_ID],
+                call.data[ATTR_ACTIVE],
+            )
+        except UnknownChoreError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_chore",
+                translation_placeholders={
+                    "chore_id": err.chore_id,
+                },
+            ) from err
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_ADD_CHILD,
@@ -154,4 +187,11 @@ async def async_setup_services(
         SERVICE_ADD_CHORE,
         async_handle_add_chore,
         schema=ADD_CHORE_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_CHORE_ACTIVE,
+        async_handle_set_chore_active,
+        schema=SET_CHORE_ACTIVE_SCHEMA,
     )

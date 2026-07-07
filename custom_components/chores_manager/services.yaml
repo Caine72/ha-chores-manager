@@ -53,3 +53,17 @@ add_chore:
       selector:
         text:
           multiple: true
+
+set_chore_active:
+  fields:
+    chore_id:
+      required: true
+      example: chore_1
+      selector:
+        text:
+
+    active:
+      required: true
+      example: false
+      selector:
+        boolean:

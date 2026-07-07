@@ -19,6 +19,7 @@ from .exceptions import (
     InactiveChildrenError,
     NoActiveChildrenError,
     UnknownChildrenError,
+    UnknownChoreError,
 )
 
 type StoreListener = Callable[[], None]
@@ -258,6 +259,25 @@ class ChoresManagerStore:
             await self.async_save()
 
         return chore_id, assignment_ids
+
+    async def async_set_chore_active(
+        self,
+        chore_id: str,
+        active: bool,
+    ) -> bool:
+        """Set whether a chore is active and return whether it changed."""
+        async with self._lock:
+            chore = self.data["chores"].get(chore_id)
+            if chore is None:
+                raise UnknownChoreError(chore_id)
+
+            if chore["active"] is active:
+                return False
+
+            chore["active"] = active
+            await self.async_save()
+
+        return True
 
     async def async_complete_assignment(self, assignment_id: str) -> str:
         """Complete an assignment for today."""

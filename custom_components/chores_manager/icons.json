@@ -5,6 +5,9 @@
     },
     "add_chore": {
       "service": "mdi:clipboard-plus-outline"
+    },
+    "set_chore_active": {
+      "service": "mdi:playlist-edit"
     }
   }
 }

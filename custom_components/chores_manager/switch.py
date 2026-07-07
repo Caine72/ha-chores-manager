@@ -1,9 +1,10 @@
 """Switch entities for Chores Manager."""
 
+import asyncio
 from typing import Any
 
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN, SwitchEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .labels import async_initialize_assignment_label
@@ -18,34 +19,52 @@ async def async_setup_entry(
 ) -> None:
     """Set up Chores Manager assignment switches."""
     store = entry.runtime_data
-    known_assignment_ids: set[str] = set()
+    assignment_entities: dict[str, ChoreAssignmentSwitch] = {}
+    reconcile_lock = asyncio.Lock()
 
-    def async_add_new_assignments() -> None:
-        """Add switches for newly discovered active assignments."""
-        new_assignment_ids = [
+    def active_assignment_ids() -> set[str]:
+        """Return assignment IDs that should currently have entities."""
+        return {
             assignment_id
             for assignment_id, assignment in store.data["assignments"].items()
             if assignment["active"]
             and store.data["children"][assignment["child_id"]]["active"]
             and store.data["chores"][assignment["chore_id"]]["active"]
-            and assignment_id not in known_assignment_ids
-        ]
+        }
 
-        if not new_assignment_ids:
-            return
+    async def async_reconcile_assignments() -> None:
+        """Add and remove assignment switches to match active storage data."""
+        async with reconcile_lock:
+            desired_assignment_ids = active_assignment_ids()
 
-        known_assignment_ids.update(new_assignment_ids)
+            removed_assignment_ids = assignment_entities.keys() - desired_assignment_ids
+            for assignment_id in tuple(removed_assignment_ids):
+                entity = assignment_entities.pop(assignment_id)
+                await entity.async_remove()
 
-        async_add_entities(
-            [
-                ChoreAssignmentSwitch(store, assignment_id)
-                for assignment_id in new_assignment_ids
-            ]
+            new_assignment_ids = desired_assignment_ids - assignment_entities.keys()
+            if not new_assignment_ids:
+                return
+
+            new_entities = {
+                assignment_id: ChoreAssignmentSwitch(store, assignment_id)
+                for assignment_id in sorted(new_assignment_ids)
+            }
+            assignment_entities.update(new_entities)
+            async_add_entities(new_entities.values())
+
+    @callback
+    def async_schedule_reconciliation() -> None:
+        """Schedule assignment entity reconciliation."""
+        entry.async_create_task(
+            hass,
+            async_reconcile_assignments(),
+            "Reconcile Chores Manager assignment switches",
         )
 
-    async_add_new_assignments()
+    await async_reconcile_assignments()
 
-    entry.async_on_unload(store.async_add_listener(async_add_new_assignments))
+    entry.async_on_unload(store.async_add_listener(async_schedule_reconciliation))
 
 
 class ChoreAssignmentSwitch(SwitchEntity):

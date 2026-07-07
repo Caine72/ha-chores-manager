@@ -47,6 +47,20 @@
           "description": "Child IDs to assign. When omitted, all active children are assigned."
         }
       }
+    },
+    "set_chore_active": {
+      "name": "Set chore active",
+      "description": "Activates or deactivates a chore without deleting it or its history.",
+      "fields": {
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "The stable ID of the chore to update."
+        },
+        "active": {
+          "name": "Active",
+          "description": "Whether the chore and its assignment switches should be active."
+        }
+      }
     }
   },
   "exceptions": {
@@ -61,6 +75,9 @@
     },
     "inactive_children": {
       "message": "These children are inactive: {child_ids}."
+    },
+    "unknown_chore": {
+      "message": "Unknown chore ID: {chore_id}."
     }
   }
 }
