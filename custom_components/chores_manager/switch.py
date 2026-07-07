@@ -17,14 +17,34 @@ async def async_setup_entry(
 ) -> None:
     """Set up Chores Manager assignment switches."""
     store = entry.runtime_data
+    known_assignment_ids: set[str] = set()
 
-    async_add_entities(
-        ChoreAssignmentSwitch(store, assignment_id)
-        for assignment_id, assignment in store.data["assignments"].items()
-        if assignment["active"]
-        and store.data["children"][assignment["child_id"]]["active"]
-        and store.data["chores"][assignment["chore_id"]]["active"]
-    )
+    def async_add_new_assignments() -> None:
+        """Add switches for newly discovered active assignments."""
+        new_assignment_ids = [
+            assignment_id
+            for assignment_id, assignment in store.data["assignments"].items()
+            if assignment["active"]
+            and store.data["children"][assignment["child_id"]]["active"]
+            and store.data["chores"][assignment["chore_id"]]["active"]
+            and assignment_id not in known_assignment_ids
+        ]
+
+        if not new_assignment_ids:
+            return
+
+        known_assignment_ids.update(new_assignment_ids)
+
+        async_add_entities(
+            [
+                ChoreAssignmentSwitch(store, assignment_id)
+                for assignment_id in new_assignment_ids
+            ]
+        )
+
+    async_add_new_assignments()
+
+    entry.async_on_unload(store.async_add_listener(async_add_new_assignments))
 
 
 class ChoreAssignmentSwitch(SwitchEntity):

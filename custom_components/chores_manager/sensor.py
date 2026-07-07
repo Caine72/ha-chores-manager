@@ -18,12 +18,28 @@ async def async_setup_entry(
 ) -> None:
     """Set up Chores Manager sensors."""
     store = entry.runtime_data
+    known_child_ids: set[str] = set()
 
-    async_add_entities(
-        ChildWeeklyPointsSensor(store, child_id)
-        for child_id, child in store.data["children"].items()
-        if child["active"]
-    )
+    def async_add_new_children() -> None:
+        """Add sensors for newly discovered active children."""
+        new_child_ids = [
+            child_id
+            for child_id, child in store.data["children"].items()
+            if child["active"] and child_id not in known_child_ids
+        ]
+
+        if not new_child_ids:
+            return
+
+        known_child_ids.update(new_child_ids)
+
+        async_add_entities(
+            [ChildWeeklyPointsSensor(store, child_id) for child_id in new_child_ids]
+        )
+
+    async_add_new_children()
+
+    entry.async_on_unload(store.async_add_listener(async_add_new_children))
 
 
 class ChildWeeklyPointsSensor(SensorEntity):
