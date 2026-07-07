@@ -96,15 +96,23 @@ class ChoreAssignmentSwitch(SwitchEntity):
             "completion_mode": chore["completion_mode"],
         }
 
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to Chores Manager data changes."""
+        await super().async_added_to_hass()
+
+        self.async_on_remove(
+            self._store.async_add_listener(
+                self.async_write_ha_state,
+            )
+        )
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Mark the chore completed today."""
         await self._store.async_complete_assignment(self._assignment_id)
-        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Remove today's chore completion."""
         await self._store.async_uncomplete_assignment(self._assignment_id)
-        self.async_write_ha_state()
 
     @property
     def _assignment(self):

@@ -25,4 +25,12 @@ DEFAULT_CHORE_ICON: Final = "mdi:checkbox-marked-circle-outline"
 SERVICE_ADD_CHILD: Final = "add_child"
 SERVICE_ADD_CHORE: Final = "add_chore"
 
-PLATFORMS: Final = (Platform.SWITCH,)
+PLATFORMS: Final = (
+    Platform.SENSOR,
+    Platform.SWITCH,
+)
+
+UNIT_POINTS: Final = "points"
+
+# datetime.date.weekday(): Monday is 0 and Saturday is 5.
+WEEK_START_WEEKDAY: Final = 5

@@ -1,18 +1,27 @@
 """Persistent storage for Chores Manager."""
 
 import asyncio
+from collections.abc import Callable
+from datetime import date, timedelta
 from typing import TypedDict
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import COMPLETION_MODE_INDEPENDENT, STORAGE_KEY, STORAGE_VERSION
+from .const import (
+    COMPLETION_MODE_INDEPENDENT,
+    STORAGE_KEY,
+    STORAGE_VERSION,
+    WEEK_START_WEEKDAY,
+)
 from .exceptions import (
     InactiveChildrenError,
     NoActiveChildrenError,
     UnknownChildrenError,
 )
+
+type StoreListener = Callable[[], None]
 
 
 class ChildData(TypedDict):
@@ -97,6 +106,7 @@ class ChoresManagerStore:
             STORAGE_KEY,
         )
         self._lock = asyncio.Lock()
+        self._listeners: set[StoreListener] = set()
         self.data = create_empty_data()
 
     async def async_load(self) -> None:
@@ -110,8 +120,30 @@ class ChoresManagerStore:
         self.data = stored_data
 
     async def async_save(self) -> None:
-        """Persist the current data."""
+        """Persist the current data and notify listeners."""
         await self._store.async_save(self.data)
+        self._async_notify_listeners()
+
+    @callback
+    def async_add_listener(
+        self,
+        listener: StoreListener,
+    ) -> Callable[[], None]:
+        """Register a listener for stored data changes."""
+        self._listeners.add(listener)
+
+        @callback
+        def remove_listener() -> None:
+            """Remove the listener."""
+            self._listeners.discard(listener)
+
+        return remove_listener
+
+    @callback
+    def _async_notify_listeners(self) -> None:
+        """Notify registered listeners that data changed."""
+        for listener in tuple(self._listeners):
+            listener()
 
     async def async_add_child(self, name: str) -> str:
         """Add a child and return its stable ID."""
@@ -262,6 +294,27 @@ class ChoresManagerStore:
                 and completion["local_date"] == today
             ),
             None,
+        )
+
+    def get_current_week_bounds(self) -> tuple[date, date]:
+        """Return the start and end dates of the current chore week."""
+        today = dt_util.now().date()
+        days_since_week_start = (today.weekday() - WEEK_START_WEEKDAY) % 7
+
+        week_start = today - timedelta(days=days_since_week_start)
+        week_end = week_start + timedelta(days=6)
+
+        return week_start, week_end
+
+    def get_current_week_points(self, child_id: str) -> int:
+        """Return the points earned by a child this chore week."""
+        week_start, week_end = self.get_current_week_bounds()
+
+        return sum(
+            completion["points"]
+            for completion in self.data["completions"].values()
+            if completion["child_id"] == child_id
+            and week_start <= date.fromisoformat(completion["local_date"]) <= week_end
         )
 
     def _resolve_child_ids(
