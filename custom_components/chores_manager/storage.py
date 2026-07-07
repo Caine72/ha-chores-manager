@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import Callable
 from datetime import date, timedelta
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
@@ -79,6 +79,7 @@ class ChoresManagerData(TypedDict):
     chores: dict[str, ChoreData]
     assignments: dict[str, AssignmentData]
     completions: dict[str, CompletionData]
+    label_initialized_assignment_ids: NotRequired[list[str]]
 
 
 def create_empty_data() -> ChoresManagerData:
@@ -92,6 +93,7 @@ def create_empty_data() -> ChoresManagerData:
         "chores": {},
         "assignments": {},
         "completions": {},
+        "label_initialized_assignment_ids": [],
     }
 
 
@@ -118,11 +120,41 @@ class ChoresManagerStore:
             return
 
         self.data = stored_data
+        if "label_initialized_assignment_ids" not in self.data:
+            self.data["label_initialized_assignment_ids"] = []
+            await self.async_save()
 
     async def async_save(self) -> None:
         """Persist the current data and notify listeners."""
         await self._store.async_save(self.data)
         self._async_notify_listeners()
+
+    def is_assignment_label_initialized(
+        self,
+        assignment_id: str,
+    ) -> bool:
+        """Return whether the default chore label was initialized."""
+        return assignment_id in self.data.get(
+            "label_initialized_assignment_ids",
+            [],
+        )
+
+    async def async_mark_assignment_label_initialized(
+        self,
+        assignment_id: str,
+    ) -> None:
+        """Record that the default chore label was initialized."""
+        async with self._lock:
+            initialized_ids = self.data.setdefault(
+                "label_initialized_assignment_ids",
+                [],
+            )
+
+            if assignment_id in initialized_ids:
+                return
+
+            initialized_ids.append(assignment_id)
+            await self.async_save()
 
     @callback
     def async_add_listener(

@@ -34,3 +34,6 @@ UNIT_POINTS: Final = "points"
 
 # datetime.date.weekday(): Monday is 0 and Saturday is 5.
 WEEK_START_WEEKDAY: Final = 5
+CHORES_LABEL_NAME: Final = "Chores"
+CHORES_LABEL_ICON: Final = "mdi:format-list-checks"
+CHORES_LABEL_DESCRIPTION: Final = "Chore assignment entities managed by Chores Manager."

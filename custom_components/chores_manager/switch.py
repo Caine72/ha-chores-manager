@@ -6,6 +6,7 @@ from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN, SwitchEntit
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .labels import async_initialize_assignment_label
 from .models import ChoresManagerConfigEntry
 from .storage import ChoresManagerStore
 
@@ -117,8 +118,15 @@ class ChoreAssignmentSwitch(SwitchEntity):
         }
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to Chores Manager data changes."""
+        """Initialize registry metadata and subscribe to data changes."""
         await super().async_added_to_hass()
+
+        await async_initialize_assignment_label(
+            self.hass,
+            self._store,
+            self._assignment_id,
+            self.registry_entry,
+        )
 
         self.async_on_remove(
             self._store.async_add_listener(
