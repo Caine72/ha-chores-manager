@@ -1,0 +1,12 @@
+{
+  "domain": "chores_manager",
+  "name": "Chores Manager",
+  "codeowners": ["@Caine72"],
+  "config_flow": true,
+  "dependencies": [],
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.0.1"
+}

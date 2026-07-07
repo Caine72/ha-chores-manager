@@ -1,0 +1,55 @@
+add_child:
+  fields:
+    name:
+      required: true
+      example: Alex
+      selector:
+        text:
+
+add_chore:
+  fields:
+    title:
+      required: true
+      example: Make the bed
+      selector:
+        text:
+
+    category:
+      required: true
+      example: Morning
+      selector:
+        text:
+
+    points:
+      required: true
+      example: 2
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          mode: box
+
+    icon:
+      required: false
+      example: mdi:bed
+      selector:
+        icon:
+
+    sort_order:
+      required: false
+      example: 10
+      selector:
+        number:
+          min: 0
+          step: 1
+          mode: box
+
+    child_ids:
+      required: false
+      example:
+        - kid_1
+        - kid_2
+      selector:
+        text:
+          multiple: true

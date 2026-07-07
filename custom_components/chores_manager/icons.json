@@ -1,0 +1,10 @@
+{
+  "services": {
+    "add_child": {
+      "service": "mdi:account-plus"
+    },
+    "add_chore": {
+      "service": "mdi:clipboard-plus-outline"
+    }
+  }
+}

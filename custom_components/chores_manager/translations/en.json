@@ -1,0 +1,66 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Chores Manager",
+        "description": "Create the Chores Manager household."
+      }
+    }
+  },
+  "services": {
+    "add_child": {
+      "name": "Add child",
+      "description": "Adds a child to Chores Manager.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "The display name of the child."
+        }
+      }
+    },
+    "add_chore": {
+      "name": "Add chore",
+      "description": "Adds a reusable chore and assigns it to children.",
+      "fields": {
+        "title": {
+          "name": "Title",
+          "description": "The display title of the chore."
+        },
+        "category": {
+          "name": "Category",
+          "description": "The category used to group the chore."
+        },
+        "points": {
+          "name": "Points",
+          "description": "The number of points awarded for completion."
+        },
+        "icon": {
+          "name": "Icon",
+          "description": "The icon used to represent the chore."
+        },
+        "sort_order": {
+          "name": "Sort order",
+          "description": "The display order. When omitted, an order is generated automatically."
+        },
+        "child_ids": {
+          "name": "Children",
+          "description": "Child IDs to assign. When omitted, all active children are assigned."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "integration_not_loaded": {
+      "message": "Chores Manager is not currently loaded."
+    },
+    "no_active_children": {
+      "message": "No active children are available. Add or activate a child before adding a chore."
+    },
+    "unknown_children": {
+      "message": "Unknown child IDs: {child_ids}."
+    },
+    "inactive_children": {
+      "message": "These children are inactive: {child_ids}."
+    }
+  }
+}
