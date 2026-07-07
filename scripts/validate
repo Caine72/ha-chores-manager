@@ -1,0 +1,174 @@
+#!/usr/bin/env zsh
+
+set -euo pipefail
+
+export GIT_PAGER=cat
+export PAGER=cat
+
+SCRIPT_DIR="${0:A:h}"
+INTEGRATION_ROOT="${INTEGRATION_ROOT:-${SCRIPT_DIR:h}}"
+CORE_ROOT="${CORE_ROOT:-/workspaces/home-assistant-core-dev}"
+DOMAIN="chores_manager"
+
+COMPONENT_SOURCE="${INTEGRATION_ROOT}/custom_components/${DOMAIN}"
+COMPONENT_PATH="config/custom_components/${DOMAIN}"
+
+TEST_SOURCE="${INTEGRATION_ROOT}/tests/components/${DOMAIN}"
+TEST_PATH="tests/components/${DOMAIN}"
+TEST_TARGET="${CORE_ROOT}/${TEST_PATH}"
+
+FIX=false
+
+function fail() {
+  print -u2 -- "Error: $*"
+  exit 1
+}
+
+function step() {
+  print
+  print -- "==> $1"
+}
+
+case "${1:-}" in
+  "")
+    ;;
+  --fix)
+    FIX=true
+    ;;
+  -h|--help)
+    cat <<EOF
+Usage:
+  ./validate.sh
+  ./validate.sh --fix
+
+Options:
+  --fix    Apply Ruff fixes and formatting before validation
+EOF
+    exit 0
+    ;;
+  *)
+    fail "Unknown option: $1"
+    ;;
+esac
+
+[[ -d "${CORE_ROOT}" ]] ||
+  fail "Home Assistant Core repository not found: ${CORE_ROOT}"
+
+[[ -d "${COMPONENT_SOURCE}" ]] ||
+  fail "Integration source not found: ${COMPONENT_SOURCE}"
+
+[[ -d "${TEST_SOURCE}" ]] ||
+  fail "Integration tests not found: ${TEST_SOURCE}"
+
+cd "${CORE_ROOT}"
+
+[[ -e "${COMPONENT_PATH}" ]] ||
+  fail "Integration is not linked into Core: ${COMPONENT_PATH}"
+
+actual_component="$(realpath "${COMPONENT_PATH}")"
+expected_component="$(realpath "${COMPONENT_SOURCE}")"
+
+[[ "${actual_component}" == "${expected_component}" ]] ||
+  fail "Integration path points to ${actual_component}, expected ${expected_component}"
+
+step "Linking tests into Home Assistant Core"
+
+mkdir -p "$(dirname "${TEST_TARGET}")"
+
+if [[ -e "${TEST_TARGET}" && ! -L "${TEST_TARGET}" ]]; then
+  fail "Refusing to replace non-symlink path: ${TEST_TARGET}"
+fi
+
+ln -sfnT "${TEST_SOURCE}" "${TEST_TARGET}"
+
+if [[ "${FIX}" == true ]]; then
+  step "Applying Ruff fixes"
+  ruff check --fix "${COMPONENT_PATH}" "${TEST_PATH}"
+
+  step "Formatting Python files"
+  ruff format "${COMPONENT_PATH}" "${TEST_PATH}"
+fi
+
+step "Checking Ruff rules"
+ruff check "${COMPONENT_PATH}" "${TEST_PATH}"
+
+step "Checking Ruff formatting"
+ruff format --check "${COMPONENT_PATH}" "${TEST_PATH}"
+
+step "Compiling Python files"
+python -m compileall -q \
+  "${COMPONENT_PATH}" \
+  "${TEST_PATH}"
+
+step "Checking JSON files"
+
+while IFS= read -r -d $'\0' file; do
+  python -m json.tool "${file}" >/dev/null
+done < <(
+  find "${COMPONENT_SOURCE}" \
+    -type f \
+    -name '*.json' \
+    -print0
+)
+
+step "Checking YAML files"
+
+while IFS= read -r -d $'\0' file; do
+  python -c '
+import sys
+from pathlib import Path
+
+import yaml
+
+yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8"))
+' "${file}"
+done < <(
+  find "${COMPONENT_SOURCE}" \
+    -type f \
+    \( -name '*.yaml' -o -name '*.yml' \) \
+    -print0
+)
+
+step "Checking final newlines"
+
+newline_failure=false
+
+while IFS= read -r -d $'\0' file; do
+  [[ -s "${file}" ]] || continue
+
+  last_byte="$(
+    tail -c 1 "${file}" |
+      od -An -t x1 |
+      tr -d '[:space:]'
+  )"
+
+  if [[ "${last_byte}" != "0a" ]]; then
+    print -u2 -- "Missing final newline: ${file}"
+    newline_failure=true
+  fi
+done < <(
+  find \
+    "${COMPONENT_SOURCE}" \
+    "${TEST_SOURCE}" \
+    -type f \
+    \( \
+      -name '*.py' \
+      -o -name '*.json' \
+      -o -name '*.yaml' \
+      -o -name '*.yml' \
+    \) \
+    -print0
+)
+
+if [[ "${newline_failure}" == true ]]; then
+  exit 1
+fi
+
+step "Checking Git whitespace"
+git --no-pager -C "${INTEGRATION_ROOT}" diff --check
+
+step "Running Chores Manager tests"
+pytest -q "${TEST_PATH}"
+
+print
+print -- "All Chores Manager validation checks passed."

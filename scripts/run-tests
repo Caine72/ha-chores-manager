@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+HA_CORE_ROOT="${HA_CORE_ROOT:-/workspaces/home-assistant-core-dev}"
+SOURCE_TESTS="${REPO_ROOT}/tests/components/chores_manager"
+TARGET_TESTS="${HA_CORE_ROOT}/tests/components/chores_manager"
+
+if [[ ! -d "${HA_CORE_ROOT}/tests/components" ]]; then
+  echo "Home Assistant Core test directory not found: ${HA_CORE_ROOT}" >&2
+  echo "Set HA_CORE_ROOT to the Home Assistant Core repository." >&2
+  exit 1
+fi
+
+if [[ -e "${TARGET_TESTS}" && ! -L "${TARGET_TESTS}" ]]; then
+  echo "Refusing to replace existing test directory: ${TARGET_TESTS}" >&2
+  exit 1
+fi
+
+ln -sfn "${SOURCE_TESTS}" "${TARGET_TESTS}"
+
+cd "${HA_CORE_ROOT}"
+
+pytest -q tests/components/chores_manager "$@"
