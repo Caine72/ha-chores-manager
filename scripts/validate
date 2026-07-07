@@ -7,7 +7,7 @@ export PAGER=cat
 
 SCRIPT_DIR="${0:A:h}"
 INTEGRATION_ROOT="${INTEGRATION_ROOT:-${SCRIPT_DIR:h}}"
-CORE_ROOT="${CORE_ROOT:-/workspaces/home-assistant-core-dev}"
+HA_CORE_ROOT="${HA_CORE_ROOT:-/workspaces/home-assistant-core-dev}"
 DOMAIN="chores_manager"
 
 COMPONENT_SOURCE="${INTEGRATION_ROOT}/custom_components/${DOMAIN}"
@@ -15,7 +15,7 @@ COMPONENT_PATH="config/custom_components/${DOMAIN}"
 
 TEST_SOURCE="${INTEGRATION_ROOT}/tests/components/${DOMAIN}"
 TEST_PATH="tests/components/${DOMAIN}"
-TEST_TARGET="${CORE_ROOT}/${TEST_PATH}"
+TEST_TARGET="${HA_CORE_ROOT}/${TEST_PATH}"
 
 FIX=false
 
@@ -38,8 +38,8 @@ case "${1:-}" in
   -h|--help)
     cat <<EOF
 Usage:
-  ./validate.sh
-  ./validate.sh --fix
+  ./validate
+  ./validate --fix
 
 Options:
   --fix    Apply Ruff fixes and formatting before validation
@@ -51,8 +51,8 @@ EOF
     ;;
 esac
 
-[[ -d "${CORE_ROOT}" ]] ||
-  fail "Home Assistant Core repository not found: ${CORE_ROOT}"
+[[ -d "${HA_CORE_ROOT}" ]] ||
+  fail "Home Assistant Core repository not found: ${HA_CORE_ROOT}"
 
 [[ -d "${COMPONENT_SOURCE}" ]] ||
   fail "Integration source not found: ${COMPONENT_SOURCE}"
@@ -60,7 +60,7 @@ esac
 [[ -d "${TEST_SOURCE}" ]] ||
   fail "Integration tests not found: ${TEST_SOURCE}"
 
-cd "${CORE_ROOT}"
+cd "${HA_CORE_ROOT}"
 
 [[ -e "${COMPONENT_PATH}" ]] ||
   fail "Integration is not linked into Core: ${COMPONENT_PATH}"
