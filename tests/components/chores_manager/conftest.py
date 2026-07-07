@@ -45,3 +45,14 @@ def config_entry(hass: HomeAssistant) -> MockConfigEntry:
     )
     entry.add_to_hass(hass)
     return entry
+
+
+@pytest.fixture
+async def loaded_config_entry(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+) -> MockConfigEntry:
+    """Set up and return the Chores Manager config entry."""
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    return config_entry
