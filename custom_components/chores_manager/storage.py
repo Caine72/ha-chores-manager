@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import NotRequired, TypedDict
 
 from homeassistant.core import HomeAssistant, callback
@@ -120,13 +120,31 @@ class ChoresManagerStore:
             return
 
         self.data = stored_data
+        data_changed = False
+
         if "label_initialized_assignment_ids" not in self.data:
             self.data["label_initialized_assignment_ids"] = []
+            data_changed = True
+
+        if self._prune_old_completions(dt_util.now().date()):
+            data_changed = True
+
+        if data_changed:
             await self.async_save()
 
     async def async_save(self) -> None:
         """Persist the current data and notify listeners."""
         await self._store.async_save(self.data)
+        self._async_notify_listeners()
+
+    async def async_handle_local_midnight(self, now: datetime) -> None:
+        """Refresh date-bound state and prune at the chore-week boundary."""
+        if now.date().weekday() == WEEK_START_WEEKDAY:
+            async with self._lock:
+                if self._prune_old_completions(now.date()):
+                    await self.async_save()
+                    return
+
         self._async_notify_listeners()
 
     def is_assignment_label_initialized(
@@ -328,12 +346,15 @@ class ChoresManagerStore:
             None,
         )
 
-    def get_current_week_bounds(self) -> tuple[date, date]:
-        """Return the start and end dates of the current chore week."""
-        today = dt_util.now().date()
-        days_since_week_start = (today.weekday() - WEEK_START_WEEKDAY) % 7
+    def get_current_week_bounds(
+        self,
+        reference_date: date | None = None,
+    ) -> tuple[date, date]:
+        """Return the chore-week bounds containing a date."""
+        current_date = reference_date or dt_util.now().date()
+        days_since_week_start = (current_date.weekday() - WEEK_START_WEEKDAY) % 7
 
-        week_start = today - timedelta(days=days_since_week_start)
+        week_start = current_date - timedelta(days=days_since_week_start)
         week_end = week_start + timedelta(days=6)
 
         return week_start, week_end
@@ -348,6 +369,21 @@ class ChoresManagerStore:
             if completion["child_id"] == child_id
             and week_start <= date.fromisoformat(completion["local_date"]) <= week_end
         )
+
+    def _prune_old_completions(self, reference_date: date) -> bool:
+        """Remove completions older than the retained two chore weeks."""
+        current_week_start, _ = self.get_current_week_bounds(reference_date)
+        retention_start = current_week_start - timedelta(days=7)
+        completion_ids_to_remove = [
+            completion_id
+            for completion_id, completion in self.data["completions"].items()
+            if date.fromisoformat(completion["local_date"]) < retention_start
+        ]
+
+        for completion_id in completion_ids_to_remove:
+            del self.data["completions"][completion_id]
+
+        return bool(completion_ids_to_remove)
 
     def _resolve_child_ids(
         self,

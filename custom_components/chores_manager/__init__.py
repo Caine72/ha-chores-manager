@@ -1,6 +1,9 @@
 """The Chores Manager integration."""
 
+from datetime import datetime
+
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
 from .const import PLATFORMS
@@ -27,6 +30,20 @@ async def async_setup_entry(
     await manager_store.async_load()
 
     entry.runtime_data = manager_store
+
+    async def async_handle_local_midnight(now: datetime) -> None:
+        """Refresh date-bound state and maintain retained completions."""
+        await manager_store.async_handle_local_midnight(now)
+
+    entry.async_on_unload(
+        async_track_time_change(
+            hass,
+            async_handle_local_midnight,
+            hour=0,
+            minute=0,
+            second=0,
+        )
+    )
 
     await hass.config_entries.async_forward_entry_setups(
         entry,
