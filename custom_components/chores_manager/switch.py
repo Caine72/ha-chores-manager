@@ -147,9 +147,15 @@ class ChoreAssignmentSwitch(SwitchEntity):
             self.registry_entry,
         )
 
+        @callback
+        def async_write_state_if_present() -> None:
+            """Write state when the assignment still exists."""
+            if self._assignment_id in self._store.data["assignments"]:
+                self.async_write_ha_state()
+
         self.async_on_remove(
             self._store.async_add_listener(
-                self.async_write_ha_state,
+                async_write_state_if_present,
             )
         )
 

@@ -1,9 +1,10 @@
 """Sensor entities for Chores Manager."""
 
+import asyncio
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import UNIT_POINTS
@@ -18,28 +19,42 @@ async def async_setup_entry(
 ) -> None:
     """Set up Chores Manager sensors."""
     store = entry.runtime_data
-    known_child_ids: set[str] = set()
+    child_entities: dict[str, ChildWeeklyPointsSensor] = {}
+    reconcile_lock = asyncio.Lock()
 
-    def async_add_new_children() -> None:
-        """Add sensors for newly discovered active children."""
-        new_child_ids = [
-            child_id
-            for child_id, child in store.data["children"].items()
-            if child["active"] and child_id not in known_child_ids
-        ]
+    async def async_reconcile_children() -> None:
+        """Add and remove child sensors to match storage data."""
+        async with reconcile_lock:
+            desired_child_ids = set(store.data["children"])
 
-        if not new_child_ids:
-            return
+            removed_child_ids = child_entities.keys() - desired_child_ids
+            for child_id in tuple(removed_child_ids):
+                entity = child_entities.pop(child_id)
+                await entity.async_remove()
 
-        known_child_ids.update(new_child_ids)
+            new_child_ids = desired_child_ids - child_entities.keys()
+            if not new_child_ids:
+                return
 
-        async_add_entities(
-            [ChildWeeklyPointsSensor(store, child_id) for child_id in new_child_ids]
+            new_entities = {
+                child_id: ChildWeeklyPointsSensor(store, child_id)
+                for child_id in sorted(new_child_ids)
+            }
+            child_entities.update(new_entities)
+            async_add_entities(new_entities.values())
+
+    @callback
+    def async_schedule_reconciliation() -> None:
+        """Schedule child entity reconciliation."""
+        entry.async_create_task(
+            hass,
+            async_reconcile_children(),
+            "Reconcile Chores Manager child sensors",
         )
 
-    async_add_new_children()
+    await async_reconcile_children()
 
-    entry.async_on_unload(store.async_add_listener(async_add_new_children))
+    entry.async_on_unload(store.async_add_listener(async_schedule_reconciliation))
 
 
 class ChildWeeklyPointsSensor(SensorEntity):
@@ -93,9 +108,15 @@ class ChildWeeklyPointsSensor(SensorEntity):
         """Subscribe to Chores Manager data changes."""
         await super().async_added_to_hass()
 
+        @callback
+        def async_write_state_if_present() -> None:
+            """Write state when the child still exists."""
+            if self._child_id in self._store.data["children"]:
+                self.async_write_ha_state()
+
         self.async_on_remove(
             self._store.async_add_listener(
-                self.async_write_ha_state,
+                async_write_state_if_present,
             )
         )
 

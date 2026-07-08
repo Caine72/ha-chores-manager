@@ -14,7 +14,7 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 - Completion snapshots are immutable historical records. Metadata edits must not rewrite previously earned points or stored names/titles.
 - Entities provide live state and control. The future out-of-repo custom card must be refactored to use stable integration IDs and this repository's integration-aware interface.
 - The `Chores` label is a secondary Home Assistant scope boundary for generic automations, templates, filtering, and user organization. It is not the primary card/integration contract. Preserve label-based external targeting; do not replace it with broad domain scans or fragile entity-name matching.
-- Deactivation preserves stored objects, registry identity, labels, and history. Do not introduce hard deletion in v0.1.
+- Deactivation preserves stored objects, registry identity, labels, and history. Explicit delete actions may remove child, chore, and assignment structure, but must preserve immutable completion snapshots until normal retention pruning.
 - Existing child, chore, and assignment lifecycle behavior must remain independent.
 - Entity IDs and unique IDs must be derived only from stable integration identity, never from mutable child names, chore titles, categories, or other display metadata.
 - User-toggleable chore assignments remain switch entities with on/off completion behavior unless the product model is explicitly changed.
@@ -58,4 +58,4 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 
 ## Current direction
 
-The next milestone is real Home Assistant acceptance described in `docs/NEXT_MILESTONE.md`. Do not add an inventory API or WebSocket command until real Home Assistant acceptance and backend v0.1 preparation are complete. Do not build the custom card in this repository; it will live in a separate repository linked later.
+The next milestone is real Home Assistant acceptance described in `docs/NEXT_MILESTONE.md`; backend v0.1 preparation follows it. Do not add an inventory API or WebSocket command until real Home Assistant acceptance and backend v0.1 preparation are complete. Do not build the custom card in this repository; it will live in a separate repository linked later.

@@ -76,6 +76,36 @@
         }
       }
     },
+    "delete_assignment": {
+      "name": "Delete assignment",
+      "description": "Deletes one child-to-chore assignment and removes its switch while preserving completion history.",
+      "fields": {
+        "assignment_id": {
+          "name": "Assignment ID",
+          "description": "The stable ID of the assignment to delete."
+        }
+      }
+    },
+    "delete_child": {
+      "name": "Delete child",
+      "description": "Deletes a child and that child's assignments while preserving completion history.",
+      "fields": {
+        "child_id": {
+          "name": "Child ID",
+          "description": "The stable ID of the child to delete."
+        }
+      }
+    },
+    "delete_chore": {
+      "name": "Delete chore",
+      "description": "Deletes a chore and its assignments while preserving completion history.",
+      "fields": {
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "The stable ID of the chore to delete."
+        }
+      }
+    },
     "set_assignment_active": {
       "name": "Set assignment active",
       "description": "Activates or deactivates one child-to-chore assignment without deleting it or its history.",
