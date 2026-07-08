@@ -1,104 +1,74 @@
-# Next milestone: integration inventory WebSocket contract
+# Next milestone: release hardening tests
 
 ## Goal
 
-Expose the complete stored Chores Manager structure to a future custom card without making labels or currently loaded entities the source of truth.
+Strengthen confidence in the existing Chores Manager backend before adding another API surface or starting custom-card work.
 
-Implement a read-only Home Assistant WebSocket command:
+This milestone should primarily add tests. Production changes are allowed only when a new test exposes a concrete defect.
 
-```text
-chores_manager/get_inventory
+## Required coverage
+
+### Registered midnight callback
+
+Test the callback registered by `async_track_time_change` through Home Assistant's event/time test helpers.
+
+Cover:
+
+- ordinary midnight refreshes daily assignment state;
+- weekly points remain in the same Saturday-Friday week;
+- Friday-to-Saturday rollover starts a new week;
+- retained completion pruning still follows the two-week policy.
+
+Do not merely call `store.async_handle_local_midnight()` directly; that behavior already has coverage.
+
+### Legacy storage compatibility
+
+Load stored data that predates `label_initialized_assignment_ids`.
+
+Verify:
+
+- setup succeeds;
+- the missing key is initialized;
+- existing children, chores, assignments, and completions are preserved;
+- upgraded data is saved;
+- entities restore correctly.
+
+### Singleton config flow
+
+Test the config flow as a singleton integration.
+
+Verify:
+
+- the first user flow creates the config entry;
+- a later user flow aborts when an entry already exists;
+- the abort reason is stable and translated;
+- no duplicate household entry is created.
+
+## Constraints
+
+- Preserve storage version 1 unless a real migration need is discovered.
+- Preserve stable IDs and registry identity.
+- Preserve completion snapshots.
+- Preserve label behavior.
+- Do not add an inventory API in this milestone.
+- Do not add a WebSocket command in this milestone.
+- Do not start custom-card development.
+- Keep changes incremental and focused.
+
+## Validation
+
+Run:
+
+```zsh
+./scripts/validate --fix
+./scripts/validate
+git diff --check
+git diff
 ```
-
-The command must return all stored children, chores, and assignments, including inactive records.
-
-## Architectural boundary
-
-- Storage remains the structural source of truth.
-- Stable IDs are the API contract.
-- Home Assistant entities remain the live state and control surface.
-- Do not return completion history in this milestone.
-- Do not add a subscription protocol yet.
-- Do not start frontend/card implementation yet.
-
-## Proposed response schema
-
-Use a versioned, deterministic JSON response shaped like:
-
-```json
-{
-  "schema_version": 1,
-  "week": {
-    "start": "2026-07-04",
-    "end": "2026-07-10"
-  },
-  "children": [
-    {
-      "child_id": "kid_1",
-      "name": "Alex",
-      "active": true,
-      "points_entity_id": "sensor.kid_1_weekly_points"
-    }
-  ],
-  "chores": [
-    {
-      "chore_id": "chore_1",
-      "title": "Make the bed",
-      "category": "Morning",
-      "points": 2,
-      "icon": "mdi:bed",
-      "active": true,
-      "sort_order": 10,
-      "completion_mode": "independent"
-    }
-  ],
-  "assignments": [
-    {
-      "assignment_id": "assignment_1",
-      "child_id": "kid_1",
-      "chore_id": "chore_1",
-      "active": true,
-      "effective_active": true,
-      "entity_id": "switch.kid_1_chore_1"
-    }
-  ]
-}
-```
-
-`effective_active` is true only when the assignment, its child, and its chore are all active.
-
-Return arrays in deterministic stable-ID order. Prefer numeric stable-ID ordering so IDs such as `kid_2` sort before `kid_10`.
-
-## Backend implementation expectations
-
-- Prefer a dedicated module such as `websocket.py` rather than expanding `services.py`.
-- Register the command once during integration setup.
-- Resolve the single loaded config entry and its `runtime_data` store at request time.
-- Return a WebSocket error when the config entry is not loaded; do not return a misleading empty inventory.
-- Keep the handler read-only and synchronous/callback-based unless actual I/O requires otherwise.
-- Do not require administrator access for this read-only command; a normal authenticated dashboard user should be able to render the household chore card.
-- Derive entity IDs from stable stored IDs using the same convention as the entity platforms.
-- Avoid exposing internal counters or label-initialization markers.
-
-Before implementation, inspect current Home Assistant Core WebSocket command patterns and test helpers in `/workspaces/home-assistant-core-dev`.
-
-## Required test coverage
-
-Add focused WebSocket tests covering at least:
-
-1. Empty loaded inventory with schema version and current week bounds.
-2. Active children, chores, and assignments with expected stable IDs and entity IDs.
-3. Inactive child, chore, and assignment records are still returned.
-4. `effective_active` reflects all three lifecycle levels.
-5. Completion records are not exposed and completion state does not alter structural inventory.
-6. Deterministic stable-ID ordering.
-7. A clear WebSocket error when the integration entry is not loaded.
-8. Existing 56 tests remain passing.
 
 ## Done when
 
-- The command can be called through a Home Assistant WebSocket client.
-- The response matches the documented versioned contract.
-- No existing action, entity, persistence, label, completion, or lifecycle behavior changes.
-- `./scripts/validate --fix` and `./scripts/validate` pass.
-- The final diff has been reviewed for API leakage, unstable identity, and accidental history mutation.
+- The integration wiring described above is covered.
+- Existing tests remain passing.
+- Any discovered defect has a focused regression test.
+- No unrelated behavior or architecture is changed.

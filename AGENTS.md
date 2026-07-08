@@ -57,4 +57,4 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 
 ## Current direction
 
-The next milestone is the read-only integration inventory contract described in `docs/NEXT_MILESTONE.md`. Do not start the custom card yet.
+The next milestone is release hardening described in `docs/NEXT_MILESTONE.md`. Do not add an inventory API, WebSocket command, or custom card until that milestone and real Home Assistant acceptance are complete.
