@@ -59,26 +59,21 @@ Validation completed:
 - `git diff --check`
 - complete diff review
 
-## Next milestone: real Home Assistant acceptance
+## Completed milestone: real Home Assistant acceptance
 
-Exercise the integration in a running Home Assistant development instance.
+Real Home Assistant acceptance was executed; the detailed acceptance report is a local manual-validation artifact ignored by Git.
 
-Acceptance workflow:
+Completed acceptance coverage:
 
-1. Install or reload the integration through the config-entry flow.
-2. Add children.
-3. Add chores and assignments.
-4. Rename children and chores.
-5. Complete and undo assignments.
-6. Deactivate and reactivate children, chores, and assignments.
-7. Reload Home Assistant and confirm identity, state, labels, and history remain correct.
-8. Validate ordinary midnight rollover.
-9. Validate Friday-to-Saturday week rollover.
-10. Confirm current and previous week retention behavior.
+- config-entry reload and integration lifecycle checks in a running HA instance;
+- create/update/complete/deactivate/reactivate/delete lifecycle behavior;
+- identity and stable-ID invariants across metadata edits and reload;
+- post-delete entity and registry behavior;
+- time-bound midnight/rollover/retention checks via focused automated tests.
 
-Record defects as focused follow-up changes with automated regression tests.
+No new backend defects were identified in the deterministic acceptance pass.
 
-## Backend v0.1 preparation
+## Next milestone: backend v0.1 preparation
 
 After automated hardening and real acceptance:
 

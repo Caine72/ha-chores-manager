@@ -8,3 +8,5 @@ htmlcov/
 .vscode/
 .env
 chores-manager-context.txt
+
+docs/REAL_HA_ACCEPTANCE_REPORT.md

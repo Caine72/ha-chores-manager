@@ -1,60 +1,33 @@
-# Next milestone: real Home Assistant acceptance
+# Next milestone: backend v0.1 preparation
 
 ## Goal
 
-Exercise Chores Manager in a running Home Assistant development instance before backend v0.1 preparation.
+Prepare and finalize the backend v0.1 release package after real Home Assistant acceptance.
 
-This milestone validates real config-entry flow, service actions, entity registry behavior, labels, persisted storage, reload behavior, and date-bound refreshes as users will experience them.
+This milestone is release-preparation focused: documentation, behavior contracts, compatibility notes, and final validation for a stable private-use v0.1 backend release.
 
-## Scope
+## Required work
 
-This is primarily an acceptance and defect-finding milestone. Production changes are allowed only when acceptance testing exposes a concrete defect, and each fix must include a focused automated regression test.
-
-Do not add a new backend API surface during this milestone.
-
-## Required acceptance workflow
-
-Run the integration in a Home Assistant development instance and verify:
-
-1. Install or reload the integration through the config-entry flow.
-2. Add children.
-3. Add chores and assignments.
-4. Rename children and chores.
-5. Complete and undo assignments.
-6. Deactivate and reactivate children, chores, and assignments.
-7. Delete assignment, chore, and child records intentionally and verify structural cleanup behavior.
-8. Reload Home Assistant and confirm identity, state, labels, and history remain correct.
-9. Validate ordinary midnight rollover.
-10. Validate Friday-to-Saturday week rollover.
-11. Confirm current and previous week retention behavior.
-
-## What to inspect
-
-During the workflow, explicitly check:
-
-- stable entity IDs and unique IDs remain derived from `kid_*`, `chore_*`, and `assignment_*` IDs;
-- mutable child names and chore titles update display metadata without changing identity;
-- completion snapshots preserve earned points and stored names/titles from completion time;
-- the `Chores` label remains present on assignment switch entities without overwriting user-added labels;
-- inactive objects preserve stored records, registry identity, labels, and history;
-- explicit delete actions remove only targeted live structure and entities while preserving completion snapshots;
-- reload does not recreate deleted entities as `restored` placeholders;
-- Saturday-Friday week bounds and two-week completion retention match automated tests.
+1. Write installation and setup documentation.
+2. Document all integration actions and validation behavior.
+3. Document entities, attributes, and stable-ID guarantees.
+4. Document week boundaries and completion-retention behavior.
+5. Document activation versus deletion semantics.
+6. Document known limitations and explicit non-goals.
+7. Review storage compatibility and upgrade behavior for storage version 1.
+8. Set release version and prepare repository packaging artifacts.
 
 ## Constraints
 
-- Preserve storage version 1 unless a real migration need is discovered.
-- Preserve stable IDs and registry identity guarantees.
-- Preserve completion snapshots.
-- Preserve label behavior.
+- Preserve storage version 1 unless a concrete migration requirement is discovered.
 - Do not add an inventory API in this milestone.
 - Do not add a WebSocket command in this milestone.
-- Do not start custom-card development in this repository.
-- Keep any defect fixes incremental and covered by focused tests.
+- Do not build the custom card in this repository.
+- Keep behavior changes out of scope unless a release-blocking defect is found.
 
 ## Validation
 
-After any code or test change, run:
+Run:
 
 ```zsh
 ./scripts/validate --fix
@@ -63,12 +36,9 @@ git diff --check
 git diff
 ```
 
-For acceptance-only documentation or notes, at minimum review `git diff --check` and the complete diff.
-
 ## Done when
 
-- The full acceptance workflow has been exercised in a running Home Assistant development instance.
-- Any discovered defect is fixed with an automated regression test or documented as an explicit follow-up risk.
-- Existing automated validation remains passing after any fix.
-- No unrelated behavior or architecture is changed.
-- Acceptance results and follow-up risks are recorded before backend v0.1 preparation begins.
+- Backend v0.1 documentation is complete and consistent with implemented behavior.
+- Release metadata/versioning and packaging are prepared.
+- Validation passes without unresolved release-blocking issues.
+- Follow-up milestones are clearly recorded in `docs/ROADMAP.md`.
