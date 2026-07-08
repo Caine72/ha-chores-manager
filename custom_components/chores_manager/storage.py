@@ -19,6 +19,7 @@ from .exceptions import (
     InactiveChildrenError,
     NoActiveChildrenError,
     NoChoreUpdatesError,
+    UnknownAssignmentError,
     UnknownChildError,
     UnknownChildrenError,
     UnknownChoreError,
@@ -280,6 +281,25 @@ class ChoresManagerStore:
             await self.async_save()
 
         return chore_id, assignment_ids
+
+    async def async_set_assignment_active(
+        self,
+        assignment_id: str,
+        active: bool,
+    ) -> bool:
+        """Set whether an assignment is active and return whether it changed."""
+        async with self._lock:
+            assignment = self.data["assignments"].get(assignment_id)
+            if assignment is None:
+                raise UnknownAssignmentError(assignment_id)
+
+            if assignment["active"] is active:
+                return False
+
+            assignment["active"] = active
+            await self.async_save()
+
+        return True
 
     async def async_update_chore(
         self,

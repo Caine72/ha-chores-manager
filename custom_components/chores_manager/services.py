@@ -12,6 +12,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     ATTR_ACTIVE,
+    ATTR_ASSIGNMENT_ID,
     ATTR_CATEGORY,
     ATTR_CHILD_ID,
     ATTR_CHILD_IDS,
@@ -25,6 +26,7 @@ from .const import (
     DOMAIN,
     SERVICE_ADD_CHILD,
     SERVICE_ADD_CHORE,
+    SERVICE_SET_ASSIGNMENT_ACTIVE,
     SERVICE_SET_CHILD_ACTIVE,
     SERVICE_SET_CHORE_ACTIVE,
     SERVICE_UPDATE_CHORE,
@@ -33,6 +35,7 @@ from .exceptions import (
     InactiveChildrenError,
     NoActiveChildrenError,
     NoChoreUpdatesError,
+    UnknownAssignmentError,
     UnknownChildError,
     UnknownChildrenError,
     UnknownChoreError,
@@ -84,6 +87,17 @@ ADD_CHORE_SCHEMA = vol.Schema(
             ],
             vol.Length(min=1),
         ),
+    }
+)
+
+SET_ASSIGNMENT_ACTIVE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ASSIGNMENT_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+        vol.Required(ATTR_ACTIVE): cv.boolean,
     }
 )
 
@@ -202,6 +216,24 @@ async def async_setup_services(
                 },
             ) from err
 
+    async def async_handle_set_assignment_active(call: ServiceCall) -> None:
+        """Handle the set-assignment-active action."""
+        entry = _get_loaded_entry(hass)
+
+        try:
+            await entry.runtime_data.async_set_assignment_active(
+                call.data[ATTR_ASSIGNMENT_ID],
+                call.data[ATTR_ACTIVE],
+            )
+        except UnknownAssignmentError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_assignment",
+                translation_placeholders={
+                    "assignment_id": err.assignment_id,
+                },
+            ) from err
+
     async def async_handle_set_child_active(call: ServiceCall) -> None:
         """Handle the set-child-active action."""
         entry = _get_loaded_entry(hass)
@@ -277,6 +309,13 @@ async def async_setup_services(
         SERVICE_ADD_CHORE,
         async_handle_add_chore,
         schema=ADD_CHORE_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_ASSIGNMENT_ACTIVE,
+        async_handle_set_assignment_active,
+        schema=SET_ASSIGNMENT_ACTIVE_SCHEMA,
     )
 
     hass.services.async_register(

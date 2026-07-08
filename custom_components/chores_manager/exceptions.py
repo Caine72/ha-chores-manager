@@ -9,6 +9,15 @@ class NoActiveChildrenError(ChoresManagerError):
     """Raised when no active children are available."""
 
 
+class UnknownAssignmentError(ChoresManagerError):
+    """Raised when an assignment ID does not exist."""
+
+    def __init__(self, assignment_id: str) -> None:
+        """Initialize the exception."""
+        self.assignment_id = assignment_id
+        super().__init__(assignment_id)
+
+
 class UnknownChildrenError(ChoresManagerError):
     """Raised when one or more child IDs do not exist."""
 

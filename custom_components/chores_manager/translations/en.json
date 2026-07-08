@@ -48,6 +48,20 @@
         }
       }
     },
+    "set_assignment_active": {
+      "name": "Set assignment active",
+      "description": "Activates or deactivates one child-to-chore assignment without deleting it or its history.",
+      "fields": {
+        "assignment_id": {
+          "name": "Assignment ID",
+          "description": "The stable ID of the assignment to update."
+        },
+        "active": {
+          "name": "Active",
+          "description": "Whether the assignment switch should be active when its child and chore are active."
+        }
+      }
+    },
     "update_chore": {
       "name": "Update chore",
       "description": "Updates editable chore metadata without changing stable IDs or completion history.",
@@ -110,6 +124,9 @@
   "exceptions": {
     "integration_not_loaded": {
       "message": "Chores Manager is not currently loaded."
+    },
+    "unknown_assignment": {
+      "message": "Unknown assignment ID: {assignment_id}."
     },
     "no_chore_updates": {
       "message": "Provide at least one chore field to update."

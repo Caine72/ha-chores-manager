@@ -54,6 +54,20 @@ add_chore:
         text:
           multiple: true
 
+set_assignment_active:
+  fields:
+    assignment_id:
+      required: true
+      example: assignment_1
+      selector:
+        text:
+
+    active:
+      required: true
+      example: false
+      selector:
+        boolean:
+
 update_chore:
   fields:
     chore_id:
