@@ -3,6 +3,9 @@
     "add_child": {
       "service": "mdi:account-plus"
     },
+    "update_child": {
+      "service": "mdi:account-edit"
+    },
     "add_chore": {
       "service": "mdi:clipboard-plus-outline"
     },

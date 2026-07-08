@@ -18,6 +18,20 @@
         }
       }
     },
+    "update_child": {
+      "name": "Update child",
+      "description": "Updates a child's display name without changing stable IDs or completion history.",
+      "fields": {
+        "child_id": {
+          "name": "Child ID",
+          "description": "The stable ID of the child to update."
+        },
+        "name": {
+          "name": "Name",
+          "description": "The new display name of the child."
+        }
+      }
+    },
     "add_chore": {
       "name": "Add chore",
       "description": "Adds a reusable chore and assigns it to children.",

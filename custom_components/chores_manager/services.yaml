@@ -6,6 +6,20 @@ add_child:
       selector:
         text:
 
+update_child:
+  fields:
+    child_id:
+      required: true
+      example: kid_1
+      selector:
+        text:
+
+    name:
+      required: true
+      example: Alexander
+      selector:
+        text:
+
 add_chore:
   fields:
     title:

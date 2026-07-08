@@ -32,6 +32,7 @@ SERVICE_ADD_CHORE: Final = "add_chore"
 SERVICE_SET_ASSIGNMENT_ACTIVE: Final = "set_assignment_active"
 SERVICE_SET_CHILD_ACTIVE: Final = "set_child_active"
 SERVICE_SET_CHORE_ACTIVE: Final = "set_chore_active"
+SERVICE_UPDATE_CHILD: Final = "update_child"
 SERVICE_UPDATE_CHORE: Final = "update_chore"
 
 PLATFORMS: Final = (

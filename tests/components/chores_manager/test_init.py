@@ -25,6 +25,7 @@ async def test_setup_and_unload(
     assert hass.services.has_service(DOMAIN, "set_assignment_active")
     assert hass.services.has_service(DOMAIN, "set_child_active")
     assert hass.services.has_service(DOMAIN, "set_chore_active")
+    assert hass.services.has_service(DOMAIN, "update_child")
     assert hass.services.has_service(DOMAIN, "update_chore")
 
     assert await hass.config_entries.async_unload(config_entry.entry_id)

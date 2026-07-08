@@ -30,6 +30,7 @@ from .const import (
     SERVICE_SET_ASSIGNMENT_ACTIVE,
     SERVICE_SET_CHILD_ACTIVE,
     SERVICE_SET_CHORE_ACTIVE,
+    SERVICE_UPDATE_CHILD,
     SERVICE_UPDATE_CHORE,
 )
 from .exceptions import (
@@ -63,6 +64,21 @@ ADD_ASSIGNMENT_SCHEMA = vol.Schema(
 
 ADD_CHILD_SCHEMA = vol.Schema(
     {
+        vol.Required(ATTR_NAME): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1, max=100),
+        ),
+    }
+)
+
+UPDATE_CHILD_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CHILD_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
         vol.Required(ATTR_NAME): vol.All(
             cv.string,
             str.strip,
@@ -252,6 +268,24 @@ async def async_setup_services(
 
         await entry.runtime_data.async_add_child(name)
 
+    async def async_handle_update_child(call: ServiceCall) -> None:
+        """Handle the update-child action."""
+        entry = _get_loaded_entry(hass)
+
+        try:
+            await entry.runtime_data.async_update_child(
+                call.data[ATTR_CHILD_ID],
+                call.data[ATTR_NAME],
+            )
+        except UnknownChildError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_child",
+                translation_placeholders={
+                    "child_id": err.child_id,
+                },
+            ) from err
+
     async def async_handle_add_chore(call: ServiceCall) -> None:
         """Handle the add-chore action."""
         entry = _get_loaded_entry(hass)
@@ -380,6 +414,13 @@ async def async_setup_services(
         SERVICE_ADD_CHILD,
         async_handle_add_child,
         schema=ADD_CHILD_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UPDATE_CHILD,
+        async_handle_update_child,
+        schema=UPDATE_CHILD_SCHEMA,
     )
 
     hass.services.async_register(

@@ -218,6 +218,25 @@ class ChoresManagerStore:
 
         return child_id
 
+    async def async_update_child(
+        self,
+        child_id: str,
+        name: str,
+    ) -> bool:
+        """Update child metadata and return whether it changed."""
+        async with self._lock:
+            child = self.data["children"].get(child_id)
+            if child is None:
+                raise UnknownChildError(child_id)
+
+            if child["name"] == name:
+                return False
+
+            child["name"] = name
+            await self.async_save()
+
+        return True
+
     async def async_set_child_active(
         self,
         child_id: str,
