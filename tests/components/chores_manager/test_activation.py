@@ -71,7 +71,7 @@ async def test_deactivate_chore_makes_switch_unavailable_and_preserves_history(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,
 ) -> None:
-    """Test deactivation removes the entity without deleting stored history."""
+    """Test deactivation unloads the live entity without deleting history."""
     await _create_assignment(hass)
     await _call_switch_action(hass, "turn_on")
 
