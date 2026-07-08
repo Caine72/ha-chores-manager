@@ -12,7 +12,7 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 - Stable IDs use `kid_*`, `chore_*`, `assignment_*`, and `completion_*` and must never depend on display names or titles.
 - Display metadata such as child names, chore titles, categories, points, icons, and active state may change without changing stable identity.
 - Completion snapshots are immutable historical records. Metadata edits must not rewrite previously earned points or stored names/titles.
-- Entities provide live state and control. The future custom card must use stable integration IDs and an integration-aware inventory API.
+- Entities provide live state and control. The future out-of-repo custom card must be refactored to use stable integration IDs and this repository's integration-aware interface.
 - The `Chores` label is a secondary Home Assistant scope boundary for generic automations, templates, filtering, and user organization. It is not the primary card/integration contract. Preserve label-based external targeting; do not replace it with broad domain scans or fragile entity-name matching.
 - Deactivation preserves stored objects, registry identity, labels, and history. Do not introduce hard deletion in v0.1.
 - Existing child, chore, and assignment lifecycle behavior must remain independent.
@@ -58,4 +58,4 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 
 ## Current direction
 
-The next milestone is release hardening described in `docs/NEXT_MILESTONE.md`. Do not add an inventory API, WebSocket command, or custom card until that milestone and real Home Assistant acceptance are complete.
+The next milestone is real Home Assistant acceptance described in `docs/NEXT_MILESTONE.md`. Do not add an inventory API or WebSocket command until real Home Assistant acceptance and backend v0.1 preparation are complete. Do not build the custom card in this repository; it will live in a separate repository linked later.

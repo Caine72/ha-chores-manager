@@ -11,7 +11,7 @@ Development order:
 3. Complete real Home Assistant acceptance testing.
 4. Prepare and release backend v0.1.
 5. Define the backend inventory contract needed by the custom card.
-6. Build the integration-aware custom card.
+6. Reference the separate custom-card repository after it exists and refactor that card to use this repository's backend contract.
 7. Only then consider broader administration, generalization, or distribution.
 
 The source code and automated tests are authoritative if this document becomes stale.
@@ -31,31 +31,17 @@ The source code and automated tests are authoritative if this document becomes s
 - Child and chore metadata editing
 - One-time default `Chores` label initialization that preserves user labels
 - Focused automated test coverage for implemented behavior
+- Release hardening coverage for the registered midnight callback, legacy storage compatibility, and singleton config-flow behavior
 
-## Next milestone: release hardening tests
+## Completed release hardening tests
 
-Strengthen confidence in the existing backend before adding another API surface.
+Automated hardening now covers:
 
-Required work:
+- the actual registered midnight callback through Home Assistant's event/time machinery;
+- loading storage created before `label_initialized_assignment_ids` existed;
+- singleton config-flow behavior and the stable single-instance abort contract.
 
-1. Test the actual registered midnight callback through Home Assistant's event/time machinery, not only the store method.
-2. Test loading storage created before `label_initialized_assignment_ids` existed.
-3. Test singleton config-flow behavior:
-   - first setup succeeds;
-   - a second config entry cannot be created;
-   - abort reason is correct and translated.
-4. Add any small regression tests discovered while implementing the above.
-5. Keep behavior and storage format unchanged unless a concrete defect requires a minimal correction.
-
-Done when:
-
-- The new tests exercise integration wiring rather than duplicating existing unit coverage.
-- Existing lifecycle, entity, completion, retention, and label behavior remains unchanged.
-- `./scripts/validate --fix` passes.
-- `./scripts/validate` passes.
-- The complete diff has been reviewed.
-
-## Following milestone: real Home Assistant acceptance
+## Next milestone: real Home Assistant acceptance
 
 Exercise the integration in a running Home Assistant development instance.
 
@@ -119,7 +105,9 @@ Document the chosen contract before implementation.
 
 ## Integration-aware custom card
 
-Build only after the backend v0.1 work and inventory-contract decision are complete.
+The custom card will not be built in this repository. Add a link to the separate card repository here once that repository is available.
+
+The card still shapes important backend requirements. Before card work starts elsewhere, this repository must define the inventory contract and keep the following principles visible. The separate card will be refactored to consume this repository's interface instead of relying on labels, entity-name matching, or frontend-owned business data.
 
 Card principles:
 
