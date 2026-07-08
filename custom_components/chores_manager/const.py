@@ -29,6 +29,7 @@ SERVICE_ADD_CHILD: Final = "add_child"
 SERVICE_ADD_CHORE: Final = "add_chore"
 SERVICE_SET_CHILD_ACTIVE: Final = "set_child_active"
 SERVICE_SET_CHORE_ACTIVE: Final = "set_chore_active"
+SERVICE_UPDATE_CHORE: Final = "update_chore"
 
 PLATFORMS: Final = (
     Platform.SENSOR,

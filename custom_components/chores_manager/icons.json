@@ -6,6 +6,9 @@
     "add_chore": {
       "service": "mdi:clipboard-plus-outline"
     },
+    "update_chore": {
+      "service": "mdi:clipboard-edit-outline"
+    },
     "set_child_active": {
       "service": "mdi:account-cog"
     },

@@ -54,6 +54,51 @@ add_chore:
         text:
           multiple: true
 
+update_chore:
+  fields:
+    chore_id:
+      required: true
+      example: chore_1
+      selector:
+        text:
+
+    title:
+      required: false
+      example: Make the bed properly
+      selector:
+        text:
+
+    category:
+      required: false
+      example: Morning
+      selector:
+        text:
+
+    points:
+      required: false
+      example: 3
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          mode: box
+
+    icon:
+      required: false
+      example: mdi:bed
+      selector:
+        icon:
+
+    sort_order:
+      required: false
+      example: 20
+      selector:
+        number:
+          min: 0
+          step: 1
+          mode: box
+
 set_child_active:
   fields:
     child_id:

@@ -36,6 +36,10 @@ class InactiveChildrenError(ChoresManagerError):
         super().__init__(", ".join(child_ids))
 
 
+class NoChoreUpdatesError(ChoresManagerError):
+    """Raised when a chore update contains no editable fields."""
+
+
 class UnknownChoreError(ChoresManagerError):
     """Raised when a chore ID does not exist."""
 

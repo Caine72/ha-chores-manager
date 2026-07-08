@@ -27,10 +27,12 @@ from .const import (
     SERVICE_ADD_CHORE,
     SERVICE_SET_CHILD_ACTIVE,
     SERVICE_SET_CHORE_ACTIVE,
+    SERVICE_UPDATE_CHORE,
 )
 from .exceptions import (
     InactiveChildrenError,
     NoActiveChildrenError,
+    NoChoreUpdatesError,
     UnknownChildError,
     UnknownChildrenError,
     UnknownChoreError,
@@ -93,6 +95,35 @@ SET_CHILD_ACTIVE_SCHEMA = vol.Schema(
             vol.Length(min=1),
         ),
         vol.Required(ATTR_ACTIVE): cv.boolean,
+    }
+)
+
+UPDATE_CHORE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CHORE_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+        vol.Optional(ATTR_TITLE): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1, max=100),
+        ),
+        vol.Optional(ATTR_CATEGORY): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1, max=100),
+        ),
+        vol.Optional(ATTR_POINTS): vol.All(
+            vol.Coerce(int),
+            vol.Range(min=1, max=100),
+        ),
+        vol.Optional(ATTR_ICON): cv.icon,
+        vol.Optional(ATTR_SORT_ORDER): vol.All(
+            vol.Coerce(int),
+            vol.Range(min=0),
+        ),
     }
 )
 
@@ -189,6 +220,33 @@ async def async_setup_services(
                 },
             ) from err
 
+    async def async_handle_update_chore(call: ServiceCall) -> None:
+        """Handle the update-chore action."""
+        entry = _get_loaded_entry(hass)
+
+        try:
+            await entry.runtime_data.async_update_chore(
+                call.data[ATTR_CHORE_ID],
+                title=call.data.get(ATTR_TITLE),
+                category=call.data.get(ATTR_CATEGORY),
+                points=call.data.get(ATTR_POINTS),
+                icon=call.data.get(ATTR_ICON),
+                sort_order=call.data.get(ATTR_SORT_ORDER),
+            )
+        except NoChoreUpdatesError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_chore_updates",
+            ) from err
+        except UnknownChoreError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_chore",
+                translation_placeholders={
+                    "chore_id": err.chore_id,
+                },
+            ) from err
+
     async def async_handle_set_chore_active(call: ServiceCall) -> None:
         """Handle the set-chore-active action."""
         entry = _get_loaded_entry(hass)
@@ -226,6 +284,13 @@ async def async_setup_services(
         SERVICE_SET_CHILD_ACTIVE,
         async_handle_set_child_active,
         schema=SET_CHILD_ACTIVE_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UPDATE_CHORE,
+        async_handle_update_chore,
+        schema=UPDATE_CHORE_SCHEMA,
     )
 
     hass.services.async_register(

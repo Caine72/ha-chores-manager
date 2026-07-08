@@ -18,6 +18,7 @@ from .const import (
 from .exceptions import (
     InactiveChildrenError,
     NoActiveChildrenError,
+    NoChoreUpdatesError,
     UnknownChildError,
     UnknownChildrenError,
     UnknownChoreError,
@@ -279,6 +280,63 @@ class ChoresManagerStore:
             await self.async_save()
 
         return chore_id, assignment_ids
+
+    async def async_update_chore(
+        self,
+        chore_id: str,
+        *,
+        title: str | None = None,
+        category: str | None = None,
+        points: int | None = None,
+        icon: str | None = None,
+        sort_order: int | None = None,
+    ) -> bool:
+        """Update editable chore metadata and return whether it changed."""
+        async with self._lock:
+            chore = self.data["chores"].get(chore_id)
+            if chore is None:
+                raise UnknownChoreError(chore_id)
+
+            if all(
+                value is None
+                for value in (
+                    title,
+                    category,
+                    points,
+                    icon,
+                    sort_order,
+                )
+            ):
+                raise NoChoreUpdatesError
+
+            changed = False
+
+            if title is not None and chore["title"] != title:
+                chore["title"] = title
+                changed = True
+
+            if category is not None and chore["category"] != category:
+                chore["category"] = category
+                changed = True
+
+            if points is not None and chore["points"] != points:
+                chore["points"] = points
+                changed = True
+
+            if icon is not None and chore["icon"] != icon:
+                chore["icon"] = icon
+                changed = True
+
+            if sort_order is not None and chore["sort_order"] != sort_order:
+                chore["sort_order"] = sort_order
+                changed = True
+
+            if not changed:
+                return False
+
+            await self.async_save()
+
+        return True
 
     async def async_set_chore_active(
         self,
