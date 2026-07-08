@@ -16,7 +16,10 @@ from .const import (
     WEEK_START_WEEKDAY,
 )
 from .exceptions import (
+    DuplicateAssignmentError,
+    InactiveChildError,
     InactiveChildrenError,
+    InactiveChoreError,
     NoActiveChildrenError,
     NoChoreUpdatesError,
     UnknownAssignmentError,
@@ -264,23 +267,56 @@ class ChoresManagerStore:
             }
             self.data["next_chore_id"] = chore_number + 1
 
-            assignment_ids: list[str] = []
-
-            for child_id in selected_child_ids:
-                assignment_number = self.data["next_assignment_id"]
-                assignment_id = f"assignment_{assignment_number}"
-
-                self.data["assignments"][assignment_id] = {
-                    "child_id": child_id,
-                    "chore_id": chore_id,
-                    "active": True,
-                }
-                self.data["next_assignment_id"] = assignment_number + 1
-                assignment_ids.append(assignment_id)
+            assignment_ids = [
+                self._create_assignment(child_id, chore_id)
+                for child_id in selected_child_ids
+            ]
 
             await self.async_save()
 
         return chore_id, assignment_ids
+
+    async def async_add_assignment(
+        self,
+        child_id: str,
+        chore_id: str,
+    ) -> str:
+        """Assign an existing chore to an existing child."""
+        async with self._lock:
+            child = self.data["children"].get(child_id)
+            if child is None:
+                raise UnknownChildError(child_id)
+
+            chore = self.data["chores"].get(chore_id)
+            if chore is None:
+                raise UnknownChoreError(chore_id)
+
+            existing_assignment_id = next(
+                (
+                    assignment_id
+                    for assignment_id, assignment in self.data["assignments"].items()
+                    if assignment["child_id"] == child_id
+                    and assignment["chore_id"] == chore_id
+                ),
+                None,
+            )
+            if existing_assignment_id is not None:
+                raise DuplicateAssignmentError(
+                    child_id,
+                    chore_id,
+                    existing_assignment_id,
+                )
+
+            if not child["active"]:
+                raise InactiveChildError(child_id)
+
+            if not chore["active"]:
+                raise InactiveChoreError(chore_id)
+
+            assignment_id = self._create_assignment(child_id, chore_id)
+            await self.async_save()
+
+        return assignment_id
 
     async def async_set_assignment_active(
         self,
@@ -502,6 +538,24 @@ class ChoresManagerStore:
             del self.data["completions"][completion_id]
 
         return bool(completion_ids_to_remove)
+
+    def _create_assignment(
+        self,
+        child_id: str,
+        chore_id: str,
+    ) -> str:
+        """Create an active assignment while the store lock is held."""
+        assignment_number = self.data["next_assignment_id"]
+        assignment_id = f"assignment_{assignment_number}"
+
+        self.data["assignments"][assignment_id] = {
+            "child_id": child_id,
+            "chore_id": chore_id,
+            "active": True,
+        }
+        self.data["next_assignment_id"] = assignment_number + 1
+
+        return assignment_id
 
     def _resolve_child_ids(
         self,

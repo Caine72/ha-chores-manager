@@ -26,6 +26,7 @@ COMPLETION_MODE_INDEPENDENT: Final = "independent"
 
 DEFAULT_CHORE_ICON: Final = "mdi:checkbox-marked-circle-outline"
 
+SERVICE_ADD_ASSIGNMENT: Final = "add_assignment"
 SERVICE_ADD_CHILD: Final = "add_child"
 SERVICE_ADD_CHORE: Final = "add_chore"
 SERVICE_SET_ASSIGNMENT_ACTIVE: Final = "set_assignment_active"

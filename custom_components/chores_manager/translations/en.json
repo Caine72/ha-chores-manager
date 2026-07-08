@@ -48,6 +48,20 @@
         }
       }
     },
+    "add_assignment": {
+      "name": "Add assignment",
+      "description": "Assigns an existing chore to an existing active child.",
+      "fields": {
+        "child_id": {
+          "name": "Child ID",
+          "description": "The stable ID of the child to assign."
+        },
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "The stable ID of the chore to assign."
+        }
+      }
+    },
     "set_assignment_active": {
       "name": "Set assignment active",
       "description": "Activates or deactivates one child-to-chore assignment without deleting it or its history.",
@@ -124,6 +138,15 @@
   "exceptions": {
     "integration_not_loaded": {
       "message": "Chores Manager is not currently loaded."
+    },
+    "duplicate_assignment": {
+      "message": "Child {child_id} is already assigned to chore {chore_id} as {assignment_id}."
+    },
+    "inactive_child": {
+      "message": "Child {child_id} is inactive. Activate the child before adding an assignment."
+    },
+    "inactive_chore": {
+      "message": "Chore {chore_id} is inactive. Activate the chore before adding an assignment."
     },
     "unknown_assignment": {
       "message": "Unknown assignment ID: {assignment_id}."

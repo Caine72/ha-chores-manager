@@ -6,6 +6,9 @@
     "add_chore": {
       "service": "mdi:clipboard-plus-outline"
     },
+    "add_assignment": {
+      "service": "mdi:link-plus"
+    },
     "set_assignment_active": {
       "service": "mdi:link-variant"
     },

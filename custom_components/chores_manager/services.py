@@ -24,6 +24,7 @@ from .const import (
     ATTR_TITLE,
     DEFAULT_CHORE_ICON,
     DOMAIN,
+    SERVICE_ADD_ASSIGNMENT,
     SERVICE_ADD_CHILD,
     SERVICE_ADD_CHORE,
     SERVICE_SET_ASSIGNMENT_ACTIVE,
@@ -32,7 +33,10 @@ from .const import (
     SERVICE_UPDATE_CHORE,
 )
 from .exceptions import (
+    DuplicateAssignmentError,
+    InactiveChildError,
     InactiveChildrenError,
+    InactiveChoreError,
     NoActiveChildrenError,
     NoChoreUpdatesError,
     UnknownAssignmentError,
@@ -41,6 +45,21 @@ from .exceptions import (
     UnknownChoreError,
 )
 from .models import ChoresManagerConfigEntry
+
+ADD_ASSIGNMENT_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CHILD_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+        vol.Required(ATTR_CHORE_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+    }
+)
 
 ADD_CHILD_SCHEMA = vol.Schema(
     {
@@ -174,6 +193,58 @@ async def async_setup_services(
 ) -> None:
     """Register Chores Manager actions."""
 
+    async def async_handle_add_assignment(call: ServiceCall) -> None:
+        """Handle the add-assignment action."""
+        entry = _get_loaded_entry(hass)
+
+        try:
+            await entry.runtime_data.async_add_assignment(
+                call.data[ATTR_CHILD_ID],
+                call.data[ATTR_CHORE_ID],
+            )
+        except UnknownChildError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_child",
+                translation_placeholders={
+                    "child_id": err.child_id,
+                },
+            ) from err
+        except UnknownChoreError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_chore",
+                translation_placeholders={
+                    "chore_id": err.chore_id,
+                },
+            ) from err
+        except DuplicateAssignmentError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="duplicate_assignment",
+                translation_placeholders={
+                    "assignment_id": err.assignment_id,
+                    "child_id": err.child_id,
+                    "chore_id": err.chore_id,
+                },
+            ) from err
+        except InactiveChildError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="inactive_child",
+                translation_placeholders={
+                    "child_id": err.child_id,
+                },
+            ) from err
+        except InactiveChoreError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="inactive_chore",
+                translation_placeholders={
+                    "chore_id": err.chore_id,
+                },
+            ) from err
+
     async def async_handle_add_child(call: ServiceCall) -> None:
         """Handle the add-child action."""
         entry = _get_loaded_entry(hass)
@@ -296,6 +367,13 @@ async def async_setup_services(
                     "chore_id": err.chore_id,
                 },
             ) from err
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ADD_ASSIGNMENT,
+        async_handle_add_assignment,
+        schema=ADD_ASSIGNMENT_SCHEMA,
+    )
 
     hass.services.async_register(
         DOMAIN,

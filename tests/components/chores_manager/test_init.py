@@ -19,6 +19,7 @@ async def test_setup_and_unload(
     assert config_entry.state is ConfigEntryState.LOADED
     assert config_entry.runtime_data is not None
 
+    assert hass.services.has_service(DOMAIN, "add_assignment")
     assert hass.services.has_service(DOMAIN, "add_child")
     assert hass.services.has_service(DOMAIN, "add_chore")
     assert hass.services.has_service(DOMAIN, "set_assignment_active")
