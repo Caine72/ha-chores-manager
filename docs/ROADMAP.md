@@ -69,7 +69,8 @@ Completed acceptance coverage:
 - create/update/complete/deactivate/reactivate/delete lifecycle behavior;
 - identity and stable-ID invariants across metadata edits and reload;
 - post-delete entity and registry behavior;
-- time-bound midnight/rollover/retention checks via focused automated tests.
+- time-bound midnight/rollover/retention checks via focused automated tests;
+- repeatable live acceptance automation via `./scripts/run-real-ha-acceptance` with local untracked env config.
 
 No new backend defects were identified in the deterministic acceptance pass.
 

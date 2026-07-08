@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+ENV_FILE="${REAL_HA_ENV_FILE:-${REPO_ROOT}/.real_ha_acceptance.env}"
+
+if [[ -f "${ENV_FILE}" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "${ENV_FILE}"
+  set +a
+fi
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  exec python3 "${REPO_ROOT}/scripts/real_ha_acceptance.py" --help
+fi
+
+HA_URL="${HA_URL:-http://localhost:8123}"
+HA_CONFIG_DIR="${HA_CONFIG_DIR:-/workspaces/home-assistant-core-dev/config}"
+HA_ACCEPTANCE_OUTPUT_DIR="${HA_ACCEPTANCE_OUTPUT_DIR:-/tmp}"
+
+if [[ -z "${HA_TOKEN:-}" ]]; then
+  echo "HA_TOKEN is required. Set it in ${ENV_FILE} or as an environment variable." >&2
+  exit 2
+fi
+
+exec python3 "${REPO_ROOT}/scripts/real_ha_acceptance.py" \
+  --ha-url "${HA_URL}" \
+  --token "${HA_TOKEN}" \
+  --config-dir "${HA_CONFIG_DIR}" \
+  --output-dir "${HA_ACCEPTANCE_OUTPUT_DIR}" \
+  "$@"

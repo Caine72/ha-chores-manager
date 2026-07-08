@@ -10,3 +10,4 @@ htmlcov/
 chores-manager-context.txt
 
 docs/REAL_HA_ACCEPTANCE_REPORT.md
+.real_ha_acceptance.env

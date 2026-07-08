@@ -55,6 +55,7 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 - Integration source: `custom_components/chores_manager`
 - Tests: `tests/components/chores_manager`
 - Full validation entry point: `./scripts/validate`
+- Real HA acceptance automation: `./scripts/run-real-ha-acceptance` (reads local `.real_ha_acceptance.env`)
 
 ## Current direction
 
