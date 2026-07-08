@@ -74,22 +74,18 @@ Completed acceptance coverage:
 
 No new backend defects were identified in the deterministic acceptance pass.
 
-## Next milestone: backend v0.1 preparation
+## Completed milestone: backend v0.1 preparation
 
-After automated hardening and real acceptance:
+Backend v0.1 preparation is complete:
 
-- Write installation and setup documentation.
-- Document actions and their validation behavior.
-- Document entities, attributes, and stable-ID guarantees.
-- Document week boundaries and completion retention.
-- Document activation versus deletion semantics.
-- Document known limitations.
-- Review storage compatibility and upgrade behavior.
-- Set the release version and prepare repository packaging.
+- root README documents installation, setup, actions, entities, stable-ID guarantees, week boundaries, retention, activation, deletion, storage compatibility, and limitations;
+- integration version is `0.1.0`;
+- HACS custom-repository metadata and a minimal repository icon are present;
+- intended repository URL is `https://github.com/Caine72/ha-chores-manager`;
+- storage version remains `1` with no migration required;
+- backend v0.1 still does not require a custom card or custom WebSocket command.
 
-The backend v0.1 release does not require a custom card or a custom WebSocket command.
-
-## Custom-card prerequisite: inventory contract
+## Next milestone: backend inventory contract
 
 Before building the custom card, define a read-only contract that exposes integration-owned structure not reliably available from active entity states alone.
 
