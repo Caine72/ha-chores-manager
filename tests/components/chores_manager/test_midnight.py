@@ -1,5 +1,7 @@
 """Test Chores Manager date-bound state and completion retention."""
 
+from datetime import timedelta
+
 from freezegun import freeze_time
 import pytest
 
@@ -9,7 +11,7 @@ from homeassistant.util import dt as dt_util
 
 from .common import DOMAIN
 
-from tests.common import MockConfigEntry
+from tests.common import MockConfigEntry, async_fire_time_changed
 
 CHORE_SWITCH = "switch.kid_1_chore_1"
 WEEKLY_POINTS_SENSOR = "sensor.kid_1_weekly_points"
@@ -26,6 +28,15 @@ def _state(hass: HomeAssistant, entity_id: str) -> State:
     state = hass.states.get(entity_id)
     assert state is not None
     return state
+
+
+async def _setup_entry(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+) -> None:
+    """Set up the Chores Manager config entry."""
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
 
 
 async def _call_action(
@@ -53,6 +64,16 @@ async def _call_switch_action(
         action,
         {ATTR_ENTITY_ID: CHORE_SWITCH},
         blocking=True,
+    )
+    await hass.async_block_till_done()
+
+
+async def _fire_registered_midnight(hass: HomeAssistant) -> None:
+    """Fire Home Assistant's registered local-midnight callback."""
+    async_fire_time_changed(
+        hass,
+        dt_util.utcnow() + timedelta(seconds=1),
+        fire_all=True,
     )
     await hass.async_block_till_done()
 
@@ -89,10 +110,11 @@ def _completion(local_date: str) -> dict[str, str | int]:
 
 async def test_regular_midnight_refreshes_daily_state_without_resetting_points(
     hass: HomeAssistant,
-    loaded_config_entry: MockConfigEntry,
+    config_entry: MockConfigEntry,
 ) -> None:
     """Test a normal midnight clears today's state but keeps weekly points."""
     with freeze_time("2026-07-06 23:59:00+00:00"):
+        await _setup_entry(hass, config_entry)
         await _create_assignment(hass)
         await _call_switch_action(hass, "turn_on")
 
@@ -100,9 +122,8 @@ async def test_regular_midnight_refreshes_daily_state_without_resetting_points(
         assert _state(hass, WEEKLY_POINTS_SENSOR).state == "2"
 
     with freeze_time("2026-07-07 00:00:00+00:00"):
-        store = loaded_config_entry.runtime_data
-        await store.async_handle_local_midnight(dt_util.now())
-        await hass.async_block_till_done()
+        store = config_entry.runtime_data
+        await _fire_registered_midnight(hass)
 
         assert _state(hass, CHORE_SWITCH).state == "off"
         points_state = _state(hass, WEEKLY_POINTS_SENSOR)
@@ -114,10 +135,11 @@ async def test_regular_midnight_refreshes_daily_state_without_resetting_points(
 
 async def test_saturday_rollover_starts_new_week_and_retains_previous_completion(
     hass: HomeAssistant,
-    loaded_config_entry: MockConfigEntry,
+    config_entry: MockConfigEntry,
 ) -> None:
     """Test Friday-to-Saturday rollover resets current-week entity state."""
     with freeze_time("2026-07-10 23:59:00+00:00"):
+        await _setup_entry(hass, config_entry)
         await _create_assignment(hass)
         await _call_switch_action(hass, "turn_on")
 
@@ -125,9 +147,8 @@ async def test_saturday_rollover_starts_new_week_and_retains_previous_completion
         assert _state(hass, WEEKLY_POINTS_SENSOR).state == "2"
 
     with freeze_time("2026-07-11 00:00:00+00:00"):
-        store = loaded_config_entry.runtime_data
-        await store.async_handle_local_midnight(dt_util.now())
-        await hass.async_block_till_done()
+        store = config_entry.runtime_data
+        await _fire_registered_midnight(hass)
 
         assert _state(hass, CHORE_SWITCH).state == "off"
         points_state = _state(hass, WEEKLY_POINTS_SENSOR)
@@ -139,13 +160,14 @@ async def test_saturday_rollover_starts_new_week_and_retains_previous_completion
 
 async def test_saturday_pruning_keeps_current_and_previous_chore_weeks(
     hass: HomeAssistant,
-    loaded_config_entry: MockConfigEntry,
+    config_entry: MockConfigEntry,
 ) -> None:
     """Test Saturday pruning retains exactly the current and previous weeks."""
-    with freeze_time("2026-07-18 00:00:00+00:00"):
+    with freeze_time("2026-07-17 23:59:00+00:00"):
+        await _setup_entry(hass, config_entry)
         await _create_assignment(hass)
 
-        store = loaded_config_entry.runtime_data
+        store = config_entry.runtime_data
         store.data["completions"] = {
             "completion_1": _completion("2026-07-10"),
             "completion_2": _completion("2026-07-11"),
@@ -156,8 +178,8 @@ async def test_saturday_pruning_keeps_current_and_previous_chore_weeks(
         await store.async_save()
         await hass.async_block_till_done()
 
-        await store.async_handle_local_midnight(dt_util.now())
-        await hass.async_block_till_done()
+    with freeze_time("2026-07-18 00:00:00+00:00"):
+        await _fire_registered_midnight(hass)
 
         assert list(store.data["completions"]) == [
             "completion_2",
