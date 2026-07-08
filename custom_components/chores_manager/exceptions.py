@@ -18,6 +18,15 @@ class UnknownChildrenError(ChoresManagerError):
         super().__init__(", ".join(child_ids))
 
 
+class UnknownChildError(ChoresManagerError):
+    """Raised when a child ID does not exist."""
+
+    def __init__(self, child_id: str) -> None:
+        """Initialize the exception."""
+        self.child_id = child_id
+        super().__init__(child_id)
+
+
 class InactiveChildrenError(ChoresManagerError):
     """Raised when one or more selected children are inactive."""
 

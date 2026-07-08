@@ -6,6 +6,9 @@
     "add_chore": {
       "service": "mdi:clipboard-plus-outline"
     },
+    "set_child_active": {
+      "service": "mdi:account-cog"
+    },
     "set_chore_active": {
       "service": "mdi:playlist-edit"
     }

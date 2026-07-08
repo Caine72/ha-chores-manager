@@ -12,6 +12,7 @@ STORAGE_VERSION: Final = 1
 
 ATTR_CATEGORY: Final = "category"
 ATTR_ACTIVE: Final = "active"
+ATTR_CHILD_ID: Final = "child_id"
 ATTR_CHILD_IDS: Final = "child_ids"
 ATTR_CHORE_ID: Final = "chore_id"
 ATTR_ICON: Final = "icon"
@@ -26,6 +27,7 @@ DEFAULT_CHORE_ICON: Final = "mdi:checkbox-marked-circle-outline"
 
 SERVICE_ADD_CHILD: Final = "add_child"
 SERVICE_ADD_CHORE: Final = "add_chore"
+SERVICE_SET_CHILD_ACTIVE: Final = "set_child_active"
 SERVICE_SET_CHORE_ACTIVE: Final = "set_chore_active"
 
 PLATFORMS: Final = (

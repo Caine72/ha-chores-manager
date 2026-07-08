@@ -226,7 +226,11 @@ async def test_add_chore_rejects_inactive_children(
 ) -> None:
     """Test assigning a chore to an inactive child."""
     await _call_action(hass, "add_child", {"name": "Alex"})
-    loaded_config_entry.runtime_data.data["children"]["kid_1"]["active"] = False
+    await _call_action(
+        hass,
+        "set_child_active",
+        {"child_id": "kid_1", "active": False},
+    )
 
     with pytest.raises(ServiceValidationError) as exc_info:
         await hass.services.async_call(

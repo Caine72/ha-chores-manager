@@ -18,6 +18,7 @@ from .const import (
 from .exceptions import (
     InactiveChildrenError,
     NoActiveChildrenError,
+    UnknownChildError,
     UnknownChildrenError,
     UnknownChoreError,
 )
@@ -211,6 +212,25 @@ class ChoresManagerStore:
             await self.async_save()
 
         return child_id
+
+    async def async_set_child_active(
+        self,
+        child_id: str,
+        active: bool,
+    ) -> bool:
+        """Set whether a child is active and return whether it changed."""
+        async with self._lock:
+            child = self.data["children"].get(child_id)
+            if child is None:
+                raise UnknownChildError(child_id)
+
+            if child["active"] is active:
+                return False
+
+            child["active"] = active
+            await self.async_save()
+
+        return True
 
     async def async_add_chore(
         self,

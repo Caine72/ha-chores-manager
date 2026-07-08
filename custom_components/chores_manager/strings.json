@@ -48,6 +48,20 @@
         }
       }
     },
+    "set_child_active": {
+      "name": "Set child active",
+      "description": "Activates or deactivates a child without deleting assignments or history.",
+      "fields": {
+        "child_id": {
+          "name": "Child ID",
+          "description": "The stable ID of the child to update."
+        },
+        "active": {
+          "name": "Active",
+          "description": "Whether the child, weekly-points sensor, and assignment switches should be active."
+        }
+      }
+    },
     "set_chore_active": {
       "name": "Set chore active",
       "description": "Activates or deactivates a chore without deleting it or its history.",
@@ -69,6 +83,9 @@
     },
     "no_active_children": {
       "message": "No active children are available. Add or activate a child before adding a chore."
+    },
+    "unknown_child": {
+      "message": "Unknown child ID: {child_id}."
     },
     "unknown_children": {
       "message": "Unknown child IDs: {child_ids}."
