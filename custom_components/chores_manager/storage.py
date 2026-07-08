@@ -356,6 +356,64 @@ class ChoresManagerStore:
 
         return True
 
+    async def async_delete_assignment(
+        self,
+        assignment_id: str,
+    ) -> None:
+        """Delete an assignment while preserving completion snapshots."""
+        async with self._lock:
+            if assignment_id not in self.data["assignments"]:
+                raise UnknownAssignmentError(assignment_id)
+
+            self._delete_assignment_data(assignment_id)
+            await self.async_save()
+
+    async def async_delete_child(
+        self,
+        child_id: str,
+    ) -> list[str]:
+        """Delete a child and its assignments, preserving completion snapshots."""
+        async with self._lock:
+            if child_id not in self.data["children"]:
+                raise UnknownChildError(child_id)
+
+            assignment_ids = [
+                assignment_id
+                for assignment_id, assignment in self.data["assignments"].items()
+                if assignment["child_id"] == child_id
+            ]
+
+            for assignment_id in assignment_ids:
+                self._delete_assignment_data(assignment_id)
+
+            del self.data["children"][child_id]
+            await self.async_save()
+
+        return assignment_ids
+
+    async def async_delete_chore(
+        self,
+        chore_id: str,
+    ) -> list[str]:
+        """Delete a chore and its assignments, preserving completion snapshots."""
+        async with self._lock:
+            if chore_id not in self.data["chores"]:
+                raise UnknownChoreError(chore_id)
+
+            assignment_ids = [
+                assignment_id
+                for assignment_id, assignment in self.data["assignments"].items()
+                if assignment["chore_id"] == chore_id
+            ]
+
+            for assignment_id in assignment_ids:
+                self._delete_assignment_data(assignment_id)
+
+            del self.data["chores"][chore_id]
+            await self.async_save()
+
+        return assignment_ids
+
     async def async_update_chore(
         self,
         chore_id: str,
@@ -501,6 +559,20 @@ class ChoresManagerStore:
     ) -> bool:
         """Return whether an assignment is completed today."""
         return self._get_today_completion_id(assignment_id) is not None
+
+    def _delete_assignment_data(
+        self,
+        assignment_id: str,
+    ) -> None:
+        """Delete stored assignment data without touching completion snapshots."""
+        del self.data["assignments"][assignment_id]
+
+        initialized_ids = self.data.setdefault(
+            "label_initialized_assignment_ids",
+            [],
+        )
+        if assignment_id in initialized_ids:
+            initialized_ids.remove(assignment_id)
 
     def _get_today_completion_id(
         self,

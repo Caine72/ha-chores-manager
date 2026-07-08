@@ -12,6 +12,15 @@
     "add_assignment": {
       "service": "mdi:link-plus"
     },
+    "delete_assignment": {
+      "service": "mdi:link-variant-remove"
+    },
+    "delete_child": {
+      "service": "mdi:account-remove"
+    },
+    "delete_chore": {
+      "service": "mdi:clipboard-remove-outline"
+    },
     "set_assignment_active": {
       "service": "mdi:link-variant"
     },

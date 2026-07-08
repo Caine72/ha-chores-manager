@@ -7,7 +7,7 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 Development order:
 
 1. Make the current household workflow reliable.
-2. Harden validation, migration, and diagnostics.
+2. Harden validation, migration, deletion, and diagnostics.
 3. Complete real Home Assistant acceptance testing.
 4. Prepare and release backend v0.1.
 5. Define the backend inventory contract needed by the custom card.
@@ -28,6 +28,7 @@ The source code and automated tests are authoritative if this document becomes s
 - Current and previous complete week retained
 - Local-midnight state refresh
 - Child, chore, and assignment activation lifecycles
+- Explicit child, chore, and assignment delete actions with completion-snapshot preservation
 - Child and chore metadata editing
 - One-time default `Chores` label initialization that preserves user labels
 - Focused automated test coverage for implemented behavior
@@ -40,6 +41,23 @@ Automated hardening now covers:
 - the actual registered midnight callback through Home Assistant's event/time machinery;
 - loading storage created before `label_initialized_assignment_ids` existed;
 - singleton config-flow behavior and the stable single-instance abort contract.
+
+## Completed milestone: delete lifecycle
+
+Delete lifecycle is now implemented and validated:
+
+- `delete_assignment`, `delete_chore`, and `delete_child` actions are available.
+- Structural records and related live entities are removed intentionally.
+- Related entity-registry entries are removed for deleted structure.
+- Completion snapshots remain immutable and retained by normal retention pruning.
+- Stable ID counters remain monotonic and deleted IDs are not reused.
+
+Validation completed:
+
+- `./scripts/validate --fix`
+- `./scripts/validate`
+- `git diff --check`
+- complete diff review
 
 ## Next milestone: real Home Assistant acceptance
 
@@ -134,7 +152,7 @@ Each feature must preserve stable identity and completion history.
 
 ## Outside backend v0.1
 
-- Hard deletion of children, chores, assignments, or history
+- Hard deletion of completion history
 - Editing historical completion snapshots
 - Rewards, notifications, or allowance automation inside the integration
 - Generic multi-household architecture

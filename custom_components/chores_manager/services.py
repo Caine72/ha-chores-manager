@@ -1,13 +1,16 @@
 """Actions provided by Chores Manager."""
 
+from functools import partial
 from typing import cast
 
 import voluptuous as vol
 
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
@@ -27,6 +30,9 @@ from .const import (
     SERVICE_ADD_ASSIGNMENT,
     SERVICE_ADD_CHILD,
     SERVICE_ADD_CHORE,
+    SERVICE_DELETE_ASSIGNMENT,
+    SERVICE_DELETE_CHILD,
+    SERVICE_DELETE_CHORE,
     SERVICE_SET_ASSIGNMENT_ACTIVE,
     SERVICE_SET_CHILD_ACTIVE,
     SERVICE_SET_CHORE_ACTIVE,
@@ -125,6 +131,36 @@ ADD_CHORE_SCHEMA = vol.Schema(
     }
 )
 
+DELETE_ASSIGNMENT_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ASSIGNMENT_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+    }
+)
+
+DELETE_CHILD_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CHILD_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+    }
+)
+
+DELETE_CHORE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CHORE_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+    }
+)
+
 SET_ASSIGNMENT_ACTIVE_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ASSIGNMENT_ID): vol.All(
@@ -201,6 +237,95 @@ def _get_loaded_entry(
         )
 
     return cast(ChoresManagerConfigEntry, entries[0])
+
+
+def _async_remove_registry_entry(
+    hass: HomeAssistant,
+    domain: str,
+    unique_id: str,
+) -> None:
+    """Remove an entity registry entry by unique ID if it exists."""
+    entity_registry = er.async_get(hass)
+    entity_id = entity_registry.async_get_entity_id(domain, DOMAIN, unique_id)
+
+    if entity_id is not None:
+        entity_registry.async_remove(entity_id)
+
+
+def _async_remove_assignment_registry_entries(
+    hass: HomeAssistant,
+    assignment_ids: list[str],
+) -> None:
+    """Remove assignment switch registry entries by assignment IDs."""
+    for assignment_id in assignment_ids:
+        _async_remove_registry_entry(hass, SWITCH_DOMAIN, assignment_id)
+
+
+async def _async_handle_delete_assignment(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> None:
+    """Handle the delete-assignment action."""
+    entry = _get_loaded_entry(hass)
+    assignment_id: str = call.data[ATTR_ASSIGNMENT_ID]
+
+    try:
+        await entry.runtime_data.async_delete_assignment(assignment_id)
+    except UnknownAssignmentError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_assignment",
+            translation_placeholders={
+                "assignment_id": err.assignment_id,
+            },
+        ) from err
+
+    _async_remove_registry_entry(hass, SWITCH_DOMAIN, assignment_id)
+
+
+async def _async_handle_delete_child(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> None:
+    """Handle the delete-child action."""
+    entry = _get_loaded_entry(hass)
+    child_id: str = call.data[ATTR_CHILD_ID]
+
+    try:
+        assignment_ids = await entry.runtime_data.async_delete_child(child_id)
+    except UnknownChildError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_child",
+            translation_placeholders={
+                "child_id": err.child_id,
+            },
+        ) from err
+
+    _async_remove_registry_entry(hass, SENSOR_DOMAIN, f"{child_id}_weekly_points")
+    _async_remove_assignment_registry_entries(hass, assignment_ids)
+
+
+async def _async_handle_delete_chore(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> None:
+    """Handle the delete-chore action."""
+    entry = _get_loaded_entry(hass)
+    chore_id: str = call.data[ATTR_CHORE_ID]
+
+    try:
+        assignment_ids = await entry.runtime_data.async_delete_chore(chore_id)
+    except UnknownChoreError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_chore",
+            translation_placeholders={
+                "chore_id": err.chore_id,
+            },
+        ) from err
+
+    _async_remove_assignment_registry_entries(hass, assignment_ids)
 
 
 async def async_setup_services(
@@ -428,6 +553,27 @@ async def async_setup_services(
         SERVICE_ADD_CHORE,
         async_handle_add_chore,
         schema=ADD_CHORE_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DELETE_ASSIGNMENT,
+        partial(_async_handle_delete_assignment, hass),
+        schema=DELETE_ASSIGNMENT_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DELETE_CHILD,
+        partial(_async_handle_delete_child, hass),
+        schema=DELETE_CHILD_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DELETE_CHORE,
+        partial(_async_handle_delete_chore, hass),
+        schema=DELETE_CHORE_SCHEMA,
     )
 
     hass.services.async_register(

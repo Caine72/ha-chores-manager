@@ -168,3 +168,28 @@ set_chore_active:
       example: false
       selector:
         boolean:
+
+
+delete_assignment:
+  fields:
+    assignment_id:
+      required: true
+      example: assignment_1
+      selector:
+        text:
+
+delete_child:
+  fields:
+    child_id:
+      required: true
+      example: kid_1
+      selector:
+        text:
+
+delete_chore:
+  fields:
+    chore_id:
+      required: true
+      example: chore_1
+      selector:
+        text:
