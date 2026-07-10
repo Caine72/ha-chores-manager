@@ -33,20 +33,21 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 
 1. Start from the repository root and inspect `git status` before editing.
 2. Do all development work on a separate branch. Bring changes back to `main` only after validation scripts pass and the user explicitly approves.
-3. Read `docs/ROADMAP.md` and `docs/NEXT_MILESTONE.md` before starting a milestone.
-4. For non-trivial changes, inspect relevant Home Assistant Core implementations and tests, then present a concise plan before coding.
-5. Preserve familiar structure and make the smallest change that fully satisfies the milestone.
-6. Add focused tests in the same change as production behavior.
-7. Run:
+3. When publishing to `origin`, always push a branch and open a pull request, even when direct pushes to `main` are technically allowed.
+4. Read `docs/ROADMAP.md` and `docs/NEXT_MILESTONE.md` before starting a milestone.
+5. For non-trivial changes, inspect relevant Home Assistant Core implementations and tests, then present a concise plan before coding.
+6. Preserve familiar structure and make the smallest change that fully satisfies the milestone.
+7. Add focused tests in the same change as production behavior.
+8. Run:
 
    ```zsh
    ./scripts/validate --fix
    ./scripts/validate
    ```
 
-8. Review `git diff --check` and the complete diff before declaring the task done.
-9. Report changed files, behavior, tests run, and any unresolved risk.
-10. Do not commit, push, rewrite history, or modify unrelated files unless explicitly requested.
+9. Review `git diff --check` and the complete diff before declaring the task done.
+10. Report changed files, behavior, tests run, and any unresolved risk.
+11. Do not commit, push, rewrite history, or modify unrelated files unless explicitly requested.
 
 ## Environment
 
