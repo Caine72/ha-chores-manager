@@ -2,7 +2,7 @@
 
 ## Product direction
 
-Chores Manager is a private-use Home Assistant custom integration being prepared for a reliable v0.1 release.
+Chores Manager is a private-use Home Assistant custom integration moving from the reliable backend v0.1 baseline toward a v0.2 inventory and graphical management release.
 
 Development order:
 
@@ -10,9 +10,10 @@ Development order:
 2. Harden validation, migration, deletion, and diagnostics.
 3. Complete real Home Assistant acceptance testing.
 4. Prepare and release backend v0.1.
-5. Define the backend inventory contract needed by the custom card.
-6. Reference the separate custom-card repository after it exists and refactor that card to use this repository's backend contract.
-7. Only then consider broader administration, generalization, or distribution.
+5. Define the backend inventory contract needed by graphical management and the custom card.
+6. Add a graphical management interface for children, chores, and assignments so routine changes do not require manually calling actions.
+7. After v0.2, analyze the current custom card or cards and refactor them to use this repository's backend contract.
+8. Only then consider broader administration, generalization, or distribution.
 
 The source code and automated tests are authoritative if this document becomes stale.
 
@@ -85,9 +86,11 @@ Backend v0.1 preparation is complete:
 - storage version remains `1` with no migration required;
 - backend v0.1 still does not require a custom card or custom WebSocket command.
 
-## Next milestone: backend inventory contract
+## Next milestone: v0.2 inventory and graphical management
 
-Before building the custom card, define a read-only contract that exposes integration-owned structure not reliably available from active entity states alone.
+v0.2 should make the integration manageable without manually calling Home Assistant actions for normal setup and maintenance. The release theme is inventory plus graphical management.
+
+The first backend step is a read-only contract that exposes integration-owned structure not reliably available from active entity states alone.
 
 The contract will likely need:
 
@@ -100,7 +103,7 @@ The contract will likely need:
 - no mutation of stored data;
 - no completion-history leakage unless explicitly required by a later feature.
 
-At this milestone, compare supported Home Assistant transport options and choose the smallest appropriate interface. A custom WebSocket command is one possible option, not a predetermined requirement.
+Compare supported Home Assistant transport options and choose the smallest appropriate interface. A custom WebSocket command is one possible option, not a predetermined requirement.
 
 The decision should consider:
 
@@ -113,11 +116,22 @@ The decision should consider:
 
 Document the chosen contract before implementation.
 
+The graphical management work should then use the inventory contract as its source of truth and existing actions as the mutation path. It should support:
+
+- creating, editing, deactivating, reactivating, and deleting children;
+- creating, editing, deactivating, reactivating, and deleting chores;
+- assigning and unassigning chores to children;
+- clearly showing active and inactive structure;
+- refreshing inventory after mutations;
+- basic inventory diagnostics for inconsistent relationships or missing expected entities.
+
+Avoid rewards, allowance logic, notifications, import/export, historical completion editing, and broad analytics in v0.2 unless they become necessary to complete the management workflow.
+
 ## Integration-aware custom card
 
 The custom card will not be built in this repository. Add a link to the separate card repository here once that repository is available.
 
-The card still shapes important backend requirements. Before card work starts elsewhere, this repository must define the inventory contract and keep the following principles visible. The separate card will be refactored to consume this repository's interface instead of relying on labels, entity-name matching, or frontend-owned business data.
+The card still shapes important backend requirements. Before card work starts elsewhere, this repository must define the inventory contract and keep the following principles visible. After v0.2 is complete, analyze the current card or cards used for interacting with the integration, then refactor the separate card to consume this repository's interface instead of relying on labels, entity-name matching, or frontend-owned business data.
 
 Card principles:
 
@@ -133,8 +147,7 @@ Card principles:
 
 After the current workflow and card are reliable, consider:
 
-- administrative child/chore/assignment management;
-- validation and inventory diagnostics;
+- advanced validation and inventory diagnostics;
 - repair flows for inconsistent stored relationships;
 - import/export or backup helpers;
 - richer historical views;

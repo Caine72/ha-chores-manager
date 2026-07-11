@@ -1,12 +1,14 @@
-# Next milestone: backend inventory contract
+# Next milestone: v0.2 inventory and graphical management
 
 ## Goal
 
-Define and implement the smallest read-only backend contract needed by the future Chores Manager custom card.
+Deliver the v0.2 foundation for inventory-aware graphical management.
 
-The card will live in a separate repository. This milestone only prepares the backend interface it needs so the card does not rely on entity-name matching, labels, or frontend-owned business data.
+The backend must first expose the smallest read-only structure contract needed by the future Chores Manager management UI and custom card. The graphical interface should then use that contract plus existing mutation actions so normal setup and maintenance do not require manually calling Home Assistant actions.
 
-## Required work
+The card or graphical interface may live in a separate repository. This repository owns the backend contract and must keep frontend code from relying on entity-name matching, labels, or frontend-owned business data.
+
+## Required backend work
 
 1. Compare supported Home Assistant transport options for frontend inventory reads.
 2. Choose the smallest appropriate interface for read-only structure.
@@ -17,11 +19,22 @@ The card will live in a separate repository. This milestone only prepares the ba
 7. Keep mutation behavior in existing actions.
 8. Add focused automated tests for the chosen contract and unload/permission behavior.
 
+## Required graphical management work
+
+1. Use the inventory contract as the source of truth.
+2. Use existing Home Assistant actions for mutations instead of storing frontend-owned business data.
+3. Support creating, editing, deactivating, reactivating, and deleting children.
+4. Support creating, editing, deactivating, reactivating, and deleting chores.
+5. Support assigning and unassigning chores to children.
+6. Clearly show active and inactive children, chores, and assignments.
+7. Refresh inventory after mutations; add live subscriptions only if simple refresh is not enough.
+8. Surface basic inventory diagnostics for inconsistent relationships or missing expected entities.
+
 ## Constraints
 
-- Do not build the custom card in this repository.
+- Do not build the custom card in this repository unless the repository scope is explicitly changed.
 - Do not make labels or entity names the primary card contract.
-- Do not add broad administrative features in this milestone.
+- Do not add rewards, allowance logic, notifications, import/export, historical completion editing, or broad analytics in this milestone.
 - Do not expose mutable storage directly.
 - Preserve storage version 1 unless a concrete migration requirement is discovered.
 
@@ -45,7 +58,8 @@ Run real HA acceptance when the local HA instance is available and the contract 
 ## Done when
 
 - The inventory contract is documented and implemented.
-- The contract exposes all active and inactive live structure needed by the future card.
+- The contract exposes all active and inactive live structure needed by the future management UI and card.
 - Existing actions remain the mutation path.
+- The graphical management path can create and maintain children, chores, and assignments without manual action calls.
 - Validation passes without unresolved contract or compatibility risks.
-- Follow-up custom-card work is clearly recorded in `docs/ROADMAP.md`.
+- Follow-up analysis of the current card or cards is clearly recorded in `docs/ROADMAP.md`.
