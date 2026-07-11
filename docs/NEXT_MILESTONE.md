@@ -12,7 +12,7 @@ The card or graphical interface may live in a separate repository. This reposito
 
 1. Compare supported Home Assistant transport options for frontend inventory reads.
 2. Choose the smallest appropriate interface for read-only structure.
-3. Document the selected contract before implementation.
+3. Document the selected contract in `docs/INVENTORY_CONTRACT.md` before implementation.
 4. Expose stored children, chores, and assignments, including inactive records.
 5. Include stable IDs, relationships, current entity IDs where applicable, and current chore-week bounds.
 6. Avoid completion-history leakage unless a concrete card requirement is identified.
