@@ -9,7 +9,7 @@ Chores Manager is a Home Assistant custom integration I use for tracking househo
 >
 > It is also vibe coded with AI assistance. The code is intended to be practical, understandable, and reliable for my household workflow rather than polished as a broadly maintained open-source project.
 
-The backend is being prepared for a private `0.1.0` release. It intentionally focuses on the integration backend only; the custom card and inventory API are later milestones.
+The backend has a private `0.1.0` baseline and is moving toward `0.2.0` inventory-aware graphical management. It intentionally focuses on integration-owned storage, entities, actions, and the backend inventory contract; the custom card remains a separate milestone.
 
 ## What it does
 
@@ -24,13 +24,13 @@ The chore week runs Saturday through Friday using Home Assistant local time. Com
 
 ## Current scope
 
-Backend `0.1.0` is intentionally narrow:
+Current backend development scope is intentionally narrow:
 
 - one Chores Manager config entry;
 - backend storage and Home Assistant entities;
 - action-based management;
 - no custom card in this repository;
-- no inventory API yet;
+- read-only inventory API for graphical management and custom-card work;
 - no rewards, allowance logic, notifications, import/export, or diagnostics.
 
 The integration is named generally because the workflow may grow, but the current implementation is still shaped around one private household setup.
@@ -116,14 +116,20 @@ The integration uses Home Assistant storage key `chores_manager.data` at storage
 
 Storage and stable IDs are the source of truth. Labels are initialized for assignment switches as a secondary Home Assistant organization boundary and are not the primary integration contract.
 
+## Inventory API
+
+Chores Manager exposes an admin-only Home Assistant WebSocket command, `chores_manager/inventory`, for read-only structural inventory. The response includes stored children, chores, assignments, active flags, relationships, current entity IDs where available, and current chore-week bounds. It includes inactive records and does not expose completion history. Mutations remain in the existing Home Assistant actions.
+
+See `docs/INVENTORY_CONTRACT.md` for the full response contract.
+
 ## Known Limitations
 
 - This is a private-use backend release, not a broad public support commitment.
 - Only one config entry is supported.
-- There is no inventory API or custom WebSocket command yet.
+- There is no graphical management UI or custom card in this repository yet.
 - The custom card is not included in this repository.
 - Historical completion snapshots cannot be edited or hard-deleted through integration actions.
-- Rewards, allowance logic, notifications, import/export, and diagnostics are outside backend `0.1.0`.
+- Rewards, allowance logic, notifications, import/export, and diagnostics are outside the current backend scope.
 
 ## Development Validation
 

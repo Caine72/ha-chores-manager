@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
+from . import websocket_api
 from .const import PLATFORMS
 from .models import ChoresManagerConfigEntry
 from .services import async_setup_services
@@ -17,6 +18,7 @@ async def async_setup(
     config: ConfigType,
 ) -> bool:
     """Set up the Chores Manager integration."""
+    websocket_api.async_setup(hass)
     await async_setup_services(hass, config)
     return True
 
