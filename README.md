@@ -28,7 +28,8 @@ Current backend development scope is intentionally narrow:
 
 - one Chores Manager config entry;
 - backend storage and Home Assistant entities;
-- action-based management;
+- native options-flow management for children and chores;
+- Home Assistant actions for automation and assignment management;
 - no custom card in this repository;
 - read-only inventory API for graphical management and custom-card work;
 - no rewards, allowance logic, notifications, import/export, or diagnostics.
@@ -73,6 +74,12 @@ Assignment switches:
 - Attributes: `assignment_id`, `child_id`, `kid_name`, `chore_id`, `title`, `category`, `points`, `sort_order`, `completion_mode`
 
 Entity IDs and unique IDs are derived from stable integration IDs, not display names. Renaming a child or chore does not change identity.
+
+## Native Management
+
+For occasional household administration, open **Settings -> Devices & services -> Chores Manager -> Configure**. The native options flow can create, edit, activate, deactivate, and delete children and chores. It shows active and inactive records and asks for confirmation before a delete; deleting a child or chore also removes its related assignments and entities while retaining completion history.
+
+Assignment administration remains action-based until its dedicated management milestone.
 
 ## Actions
 
