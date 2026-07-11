@@ -86,46 +86,21 @@ Backend v0.1 preparation is complete:
 - storage version remains `1` with no migration required;
 - backend v0.1 still does not require a custom card or custom WebSocket command.
 
-## Next milestone: v0.2 inventory and graphical management
+## Completed milestone: v0.2 inventory contract
 
-v0.2 should make the integration manageable without manually calling Home Assistant actions for normal setup and maintenance. The release theme is inventory plus graphical management.
+The read-only, admin-only `chores_manager/inventory` WebSocket command is implemented and documented in `docs/INVENTORY_CONTRACT.md`.
 
-The first backend step is a read-only contract that exposes integration-owned structure not reliably available from active entity states alone.
+It exposes all stored children, chores, and assignments, including inactive records, stable relationships, entity-registry IDs where available, and current chore-week bounds. It intentionally excludes completion history and has no subscription; consumers refresh after mutations.
 
-The contract will likely need:
+## Next milestone: native options-flow management for children and chores
 
-- all stored children, including inactive children;
-- all stored chores, including inactive chores;
-- all stored assignments, including inactive assignments;
-- stable IDs and relationships;
-- current entity IDs where applicable;
-- current chore-week bounds;
-- no mutation of stored data;
-- no completion-history leakage unless explicitly required by a later feature.
+v0.2 should make the integration manageable without manually calling Home Assistant actions for normal setup and maintenance. The first graphical-management step is a native options flow, not a separate frontend repository: these changes are occasional administration and Home Assistant already provides the needed forms, selectors, permissions, mobile support, and installation path.
 
-Compare supported Home Assistant transport options and choose the smallest appropriate interface. A custom WebSocket command is one possible option, not a predetermined requirement.
+This milestone introduces a Configure action for the Chores Manager config entry with a top-level Children and Chores menu. It supports create, edit, activate/deactivate, and confirmed delete operations, including active and inactive records.
 
-The decision should consider:
+The options flow is only an interface. Storage, stable IDs, lifecycle behavior, and validation remain backend-owned. It must reuse existing action/store mutation logic rather than creating a frontend-owned data model or a second set of business rules.
 
-- whether the card can operate entirely from `hass.states` and normal action calls;
-- whether a service action with response data is suitable;
-- whether a custom WebSocket command is justified for frontend-only structural queries;
-- whether subscriptions are needed, or simple refresh after mutations is sufficient;
-- permissions and unload behavior;
-- entity-registry renames and inactive records.
-
-Document the chosen contract before implementation.
-
-The graphical management work should then use the inventory contract as its source of truth and existing actions as the mutation path. It should support:
-
-- creating, editing, deactivating, reactivating, and deleting children;
-- creating, editing, deactivating, reactivating, and deleting chores;
-- assigning and unassigning chores to children;
-- clearly showing active and inactive structure;
-- refreshing inventory after mutations;
-- basic inventory diagnostics for inconsistent relationships or missing expected entities.
-
-Avoid rewards, allowance logic, notifications, import/export, historical completion editing, and broad analytics in v0.2 unless they become necessary to complete the management workflow.
+Assignment administration is deliberately deferred to the following milestone. Its child-and-chore selection workflow needs a dedicated interaction design; the default all-child assignment behavior means it is expected to be used less often than chore maintenance.
 
 ## Integration-aware custom card
 

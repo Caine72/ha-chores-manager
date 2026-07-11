@@ -1,39 +1,40 @@
-# Next milestone: v0.2 inventory and graphical management
+# Next milestone: native options-flow management for children and chores
 
 ## Goal
 
-Deliver the v0.2 foundation for inventory-aware graphical management.
+Make routine Chores Manager administration available from the integration's native Home Assistant options flow. This is the appropriate UI for occasional household setup and maintenance: it adds no second frontend repository, custom resource, or build and installation path.
 
-The backend must first expose the smallest read-only structure contract needed by the future Chores Manager management UI and custom card. The graphical interface should then use that contract plus existing mutation actions so normal setup and maintenance do not require manually calling Home Assistant actions.
+The options flow is a user interface only. Integration storage and stable IDs remain authoritative. The flow must use the same backend mutation logic as the existing actions so lifecycle and validation behavior cannot diverge.
 
-The card or graphical interface may live in a separate repository. This repository owns the backend contract and must keep frontend code from relying on entity-name matching, labels, or frontend-owned business data.
+The existing `chores_manager/inventory` WebSocket command remains the backend contract for future custom-card work. The options flow may share its inventory-building logic internally, but does not require a frontend WebSocket call.
 
-## Required backend work
+## Required options-flow work
 
-1. Compare supported Home Assistant transport options for frontend inventory reads.
-2. Choose the smallest appropriate interface for read-only structure.
-3. Document the selected contract in `docs/INVENTORY_CONTRACT.md` before implementation.
-4. Expose stored children, chores, and assignments, including inactive records.
-5. Include stable IDs, relationships, current entity IDs where applicable, and current chore-week bounds.
-6. Avoid completion-history leakage unless a concrete card requirement is identified.
-7. Keep mutation behavior in existing actions.
-8. Add focused automated tests for the chosen contract and unload/permission behavior.
+1. Add a Chores Manager options flow reachable from the config entry's Configure action.
+2. Provide a top-level menu for Children and Chores management.
+3. Show active and inactive records when selecting a child or chore to manage.
+4. Support add, edit, activate, deactivate, and delete operations for children.
+5. Support add, edit, activate, deactivate, and delete operations for chores.
+6. Require an explicit confirmation before deleting a child or chore, including clear notice that related assignments are removed while completion snapshots are retained.
+7. Return users to the relevant management menu after a successful mutation so they can perform another maintenance operation without manually calling an action.
+8. Use native form validation and translate existing domain errors into useful flow errors.
 
-## Required graphical management work
+## Backend and architecture requirements
 
-1. Use the inventory contract as the source of truth.
-2. Use existing Home Assistant actions for mutations instead of storing frontend-owned business data.
-3. Support creating, editing, deactivating, reactivating, and deleting children.
-4. Support creating, editing, deactivating, reactivating, and deleting chores.
-5. Support assigning and unassigning chores to children.
-6. Clearly show active and inactive children, chores, and assignments.
-7. Refresh inventory after mutations; add live subscriptions only if simple refresh is not enough.
-8. Surface basic inventory diagnostics for inconsistent relationships or missing expected entities.
+1. Reuse the existing action/store mutation path rather than duplicating business rules in the options flow.
+2. Preserve stable IDs, immutable completion snapshots, entity-registry behavior, and current activation semantics.
+3. Keep the config entry's options separate from integration-owned business storage.
+4. Do not make labels or entity names the primary management contract.
+5. Keep the inventory contract read-only and backward compatible.
+
+## Deferred to the following milestone
+
+- Assignment administration, including add, activate/deactivate, and delete. It requires its own interaction design because the useful UI depends on selecting both a child and a chore and may later benefit from a matrix-style interface.
+- Inventory diagnostics for missing entities or inconsistent relationships.
+- A separate custom card or richer frontend.
 
 ## Constraints
 
-- Do not build the custom card in this repository unless the repository scope is explicitly changed.
-- Do not make labels or entity names the primary card contract.
 - Do not add rewards, allowance logic, notifications, import/export, historical completion editing, or broad analytics in this milestone.
 - Do not expose mutable storage directly.
 - Preserve storage version 1 unless a concrete migration requirement is discovered.
@@ -57,9 +58,8 @@ Run real HA acceptance when the local HA instance is available and the contract 
 
 ## Done when
 
-- The inventory contract is documented and implemented.
-- The contract exposes all active and inactive live structure needed by the future management UI and card.
-- Existing actions remain the mutation path.
-- The graphical management path can create and maintain children, chores, and assignments without manual action calls.
+- The existing config entry exposes a working Configure action for Chores Manager administrators.
+- Children and chores can be created and maintained, including inactive records, without manually calling an action.
+- Deletion confirmation accurately describes the lifecycle consequences.
+- Existing actions and the options flow share lifecycle and validation behavior.
 - Validation passes without unresolved contract or compatibility risks.
-- Follow-up analysis of the current card or cards is clearly recorded in `docs/ROADMAP.md`.
