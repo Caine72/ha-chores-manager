@@ -213,5 +213,140 @@
     "unknown_chore": {
       "message": "Unknown chore ID: {chore_id}."
     }
+  },
+  "options": {
+    "error": {
+      "inactive_children": "These children are inactive: {child_ids}.",
+      "integration_not_loaded": "Chores Manager is not currently loaded.",
+      "no_active_children": "Add or activate a child before adding a chore.",
+      "no_chore_updates": "Change at least one chore field.",
+      "unknown_child": "That child no longer exists.",
+      "unknown_chore": "That chore no longer exists.",
+      "unknown_error": "Chores Manager could not complete that change."
+    },
+    "step": {
+      "init": {
+        "menu_options": {
+          "children_menu": "Children",
+          "chores_menu": "Chores"
+        },
+        "title": "Manage Chores Manager"
+      },
+      "children_menu": {
+        "menu_options": {
+          "add_child": "Add child",
+          "select_child": "Manage an existing child",
+          "init": "\u2190 Back to main menu"
+        },
+        "title": "Children"
+      },
+      "chores_menu": {
+        "menu_options": {
+          "add_chore": "Add chore",
+          "select_chore": "Manage an existing chore",
+          "init": "\u2190 Back to main menu"
+        },
+        "title": "Chores"
+      },
+      "add_child": {
+        "data": {
+          "name": "Name"
+        },
+        "title": "Add child",
+        "submit": "Add child"
+      },
+      "select_child": {
+        "data": {
+          "child_id": "Child"
+        },
+        "description": "Active and inactive children are shown.",
+        "title": "Choose child",
+        "submit": "Select child"
+      },
+      "child_actions": {
+        "menu_options": {
+          "activate_child": "Activate child",
+          "deactivate_child": "Deactivate child",
+          "delete_child": "Delete child",
+          "edit_child": "Edit child",
+          "children_menu": "\u2190 Back to children"
+        },
+        "title": "Manage child",
+        "description": "Child: {name}\n\n{child_id} | {status}"
+      },
+      "edit_child": {
+        "data": {
+          "name": "Name"
+        },
+        "title": "Edit child",
+        "submit": "Save child"
+      },
+      "delete_child": {
+        "description": "Delete {name}? This also removes the child's assignments and their entities. Completion history is kept.",
+        "title": "Delete child",
+        "submit": "Delete child"
+      },
+      "add_chore": {
+        "data": {
+          "category": "Category",
+          "points": "Points",
+          "title": "Title"
+        },
+        "description": "The chore will be assigned to all active children. Assignment administration is available in a later milestone.",
+        "title": "Add chore",
+        "submit": "Add chore",
+        "sections": {
+          "advanced_chore_options": {
+            "name": "Advanced chore options",
+            "data": {
+              "icon": "Icon",
+              "sort_order": "Sort order"
+            }
+          }
+        }
+      },
+      "select_chore": {
+        "data": {
+          "chore_id": "Chore"
+        },
+        "description": "Active and inactive chores are shown.",
+        "title": "Choose chore",
+        "submit": "Select chore"
+      },
+      "chore_actions": {
+        "menu_options": {
+          "activate_chore": "Activate chore",
+          "deactivate_chore": "Deactivate chore",
+          "delete_chore": "Delete chore",
+          "edit_chore": "Edit chore",
+          "chores_menu": "\u2190 Back to chores"
+        },
+        "title": "Manage chore",
+        "description": "Chore: {title}\n\n{category} | {points} points | {chore_id} | {status}"
+      },
+      "edit_chore": {
+        "data": {
+          "category": "Category",
+          "points": "Points",
+          "title": "Title"
+        },
+        "title": "Edit chore",
+        "submit": "Save chore",
+        "sections": {
+          "advanced_chore_options": {
+            "name": "Advanced chore options",
+            "data": {
+              "icon": "Icon",
+              "sort_order": "Sort order"
+            }
+          }
+        }
+      },
+      "delete_chore": {
+        "description": "Delete {title}? This also removes the chore's assignments and their entities. Completion history is kept.",
+        "title": "Delete chore",
+        "submit": "Delete chore"
+      }
+    }
   }
 }
