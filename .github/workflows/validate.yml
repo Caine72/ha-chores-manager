@@ -1,0 +1,96 @@
+name: Validate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+          comment: false
+          ignore: description topics license
+
+  validate-hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hassfest validation
+        uses: home-assistant/actions/hassfest@master
+
+  validate-tests:
+    name: Project validation
+    runs-on: ubuntu-latest
+    env:
+      HA_CORE_REF: "2026.7.0"
+    steps:
+      - name: Check out Chores Manager
+        uses: actions/checkout@v4
+        with:
+          path: integration
+
+      - name: Check out Home Assistant Core
+        uses: actions/checkout@v4
+        with:
+          repository: home-assistant/core
+          ref: ${{ env.HA_CORE_REF }}
+          path: core
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: core/.python-version
+
+      - name: Install zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            core/requirements.txt
+            core/requirements_all.txt
+            core/requirements_test.txt
+            core/requirements_test_pre_commit.txt
+
+      - name: Install Home Assistant test dependencies
+        working-directory: core
+        run: |
+          uv venv .venv --python "${pythonLocation}/bin/python"
+          . .venv/bin/activate
+          uv pip install \
+            -r requirements.txt \
+            -r requirements_all.txt \
+            -r requirements_test.txt \
+            -r requirements_test_pre_commit.txt
+          uv pip install -e . --config-settings editable_mode=compat
+          python -m script.translations develop --all
+
+      - name: Link integration into Home Assistant Core
+        run: |
+          mkdir -p core/config/custom_components
+          ln -sfnT \
+            "${GITHUB_WORKSPACE}/integration/custom_components/chores_manager" \
+            "${GITHUB_WORKSPACE}/core/config/custom_components/chores_manager"
+
+      - name: Run project validation
+        working-directory: integration
+        env:
+          HA_CORE_ROOT: ${{ github.workspace }}/core
+        run: |
+          . ../core/.venv/bin/activate
+          ./scripts/validate

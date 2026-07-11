@@ -31,7 +31,7 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 
 ## Development workflow
 
-1. Start from the repository root and inspect `git status` before editing.
+1. Start from the repository root, inspect `git status`, switch to `main`, and run `git pull origin main` before creating a development branch.
 2. Do all development work on a separate branch. Bring changes back to `main` only after validation scripts pass and the user explicitly approves.
 3. When publishing to `origin`, always push a branch and open a pull request, even when direct pushes to `main` are technically allowed.
 4. Read `docs/ROADMAP.md` and `docs/NEXT_MILESTONE.md` before starting a milestone.

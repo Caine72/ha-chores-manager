@@ -1,5 +1,7 @@
 # Chores Manager
 
+[![Validate](https://github.com/Caine72/ha-chores-manager/actions/workflows/validate.yml/badge.svg)](https://github.com/Caine72/ha-chores-manager/actions/workflows/validate.yml)
+
 Chores Manager is a Home Assistant custom integration I use for tracking household chores, daily completions, and weekly points.
 
 > [!IMPORTANT]
