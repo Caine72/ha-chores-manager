@@ -139,6 +139,52 @@ async def test_delete_assignment_removes_switch_and_allows_new_assignment_id(
     assert store.data["completions"] == {"completion_1": completion}
 
 
+async def test_remove_chores_from_child_rejects_batch_atomically(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test one missing relationship prevents every requested removal."""
+    await _create_assignment(hass)
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Feed the cat",
+            "category": "Evening",
+            "points": 3,
+        },
+    )
+    await _call_action(
+        hass,
+        "delete_assignment",
+        {"assignment_id": "assignment_2"},
+    )
+
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await hass.services.async_call(
+            DOMAIN,
+            "remove_chores_from_child",
+            {
+                "child_id": "kid_1",
+                "chore_ids": ["chore_1", "chore_2"],
+            },
+            blocking=True,
+        )
+
+    assert exc_info.value.translation_key == "missing_assignments"
+    assert exc_info.value.translation_placeholders == {"chore_ids": "chore_2"}
+    store = loaded_config_entry.runtime_data
+    assert store.data["assignments"] == {
+        "assignment_1": {
+            "child_id": "kid_1",
+            "chore_id": "chore_1",
+            "active": True,
+        }
+    }
+    assert store.data["next_assignment_id"] == 3
+    assert hass.states.get(ALEX_SWITCH) is not None
+
+
 async def test_delete_child_removes_sensor_assignments_and_switches(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,

@@ -32,6 +32,7 @@ from .const import (
     SERVICE_DELETE_ASSIGNMENT,
     SERVICE_DELETE_CHILD,
     SERVICE_DELETE_CHORE,
+    SERVICE_REMOVE_CHORES_FROM_CHILD,
     SERVICE_SET_ASSIGNMENT_ACTIVE,
     SERVICE_SET_CHILD_ACTIVE,
     SERVICE_SET_CHORE_ACTIVE,
@@ -85,6 +86,8 @@ class ChoresManagerOptionsFlow(OptionsFlow):
 
     _pending_assignment_child_id: str | None = None
     _pending_assignment_chore_ids: list[str] | None = None
+    _pending_removal_child_id: str | None = None
+    _pending_removal_chore_ids: list[str] | None = None
     _selected_assignment_id: str | None = None
     _selected_child_id: str | None = None
     _selected_chore_id: str | None = None
@@ -213,6 +216,58 @@ class ChoresManagerOptionsFlow(OptionsFlow):
                 key=lambda item: _stable_id_sort_key(item[0]),
             )
             if child["active"] and self._eligible_assignment_chores(child_id)
+        ]
+
+    def _assigned_chore_options(
+        self,
+        child_id: str,
+    ) -> list[selector.SelectOptionDict]:
+        """Return chores currently assigned to the selected child."""
+        assigned_chore_ids = {
+            assignment["chore_id"]
+            for assignment in self._store.data["assignments"].values()
+            if assignment["child_id"] == child_id
+        }
+        return [
+            selector.SelectOptionDict(
+                value=chore_id,
+                label=(
+                    f"{chore['title']} "
+                    f"({chore['category']}, {chore['points']} points, {chore_id})"
+                    if chore["active"]
+                    else (
+                        f"{chore['title']} ({chore['category']}, "
+                        f"{chore['points']} points, {chore_id}, inactive)"
+                    )
+                ),
+            )
+            for chore_id, chore in sorted(
+                self._store.data["chores"].items(),
+                key=lambda item: _stable_id_sort_key(item[0]),
+            )
+            if chore_id in assigned_chore_ids
+        ]
+
+    def _removable_assignment_children(self) -> list[selector.SelectOptionDict]:
+        """Return children that currently have at least one assignment."""
+        assigned_child_ids = {
+            assignment["child_id"]
+            for assignment in self._store.data["assignments"].values()
+        }
+        return [
+            selector.SelectOptionDict(
+                value=child_id,
+                label=(
+                    f"{child['name']} ({child_id})"
+                    if child["active"]
+                    else f"{child['name']} ({child_id}, inactive)"
+                ),
+            )
+            for child_id, child in sorted(
+                self._store.data["children"].items(),
+                key=lambda item: _stable_id_sort_key(item[0]),
+            )
+            if child_id in assigned_child_ids
         ]
 
     def _assignment_options(self) -> list[selector.SelectOptionDict]:
@@ -650,6 +705,8 @@ class ChoresManagerOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Show assignment management choices."""
         menu_options = ["add_assignment_child"]
+        if self._removable_assignment_children():
+            menu_options.append("remove_assignment_child")
         if self._assignment_options():
             menu_options.append("select_assignment")
         menu_options.append("init")
@@ -761,6 +818,117 @@ class ChoresManagerOptionsFlow(OptionsFlow):
 
         return self.async_show_form(
             step_id="add_assignment_confirm",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "name": child["name"],
+                "titles": ", ".join(
+                    chore["title"] for chore in chores if chore is not None
+                ),
+                "count": str(len(chores)),
+            },
+            errors=errors,
+        )
+
+    async def async_step_remove_assignment_child(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Select a child whose chore assignments should be removed."""
+        options = self._removable_assignment_children()
+        if not options:
+            return await self.async_step_assignments_menu()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            child_id = user_input[ATTR_CHILD_ID]
+            if any(option["value"] == child_id for option in options):
+                self._pending_removal_child_id = child_id
+                return await self.async_step_remove_assignment_chore()
+            errors["base"] = "unknown_child"
+
+        return self.async_show_form(
+            step_id="remove_assignment_child",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(ATTR_CHILD_ID): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=options)
+                    )
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_remove_assignment_chore(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Select chore assignments to remove from one child."""
+        child_id = self._pending_removal_child_id
+        child = self._store.data["children"].get(child_id) if child_id else None
+        if child is None:
+            return await self.async_step_remove_assignment_child()
+
+        options = self._assigned_chore_options(child_id)
+        if not options:
+            return await self.async_step_assignments_menu()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            chore_ids = user_input[ATTR_CHORE_IDS]
+            option_ids = {option["value"] for option in options}
+            if (
+                chore_ids
+                and len(chore_ids) == len(set(chore_ids))
+                and set(chore_ids) <= option_ids
+            ):
+                self._pending_removal_chore_ids = chore_ids
+                return await self.async_step_remove_assignment_confirm()
+            errors["base"] = "unknown_chores"
+
+        return self.async_show_form(
+            step_id="remove_assignment_chore",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(ATTR_CHORE_IDS): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            multiple=True,
+                        )
+                    )
+                }
+            ),
+            description_placeholders={"name": child["name"]},
+            errors=errors,
+        )
+
+    async def async_step_remove_assignment_confirm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Confirm atomic removal of selected assignment relationships."""
+        child_id = self._pending_removal_child_id
+        chore_ids = self._pending_removal_chore_ids
+        child = self._store.data["children"].get(child_id) if child_id else None
+        chores = [
+            self._store.data["chores"].get(chore_id) for chore_id in (chore_ids or [])
+        ]
+        if child is None or not chores or any(chore is None for chore in chores):
+            return await self.async_step_assignments_menu()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            error = await self._async_call_action(
+                SERVICE_REMOVE_CHORES_FROM_CHILD,
+                {ATTR_CHILD_ID: child_id, ATTR_CHORE_IDS: chore_ids},
+            )
+            if error is None:
+                self._pending_removal_child_id = None
+                self._pending_removal_chore_ids = None
+                return await self.async_step_assignments_menu()
+            errors["base"] = error
+
+        return self.async_show_form(
+            step_id="remove_assignment_confirm",
             data_schema=vol.Schema({}),
             description_placeholders={
                 "name": child["name"],

@@ -454,6 +454,100 @@ async def test_options_flow_explains_when_no_assignment_pair_is_available(
     assert result["step_id"] == "assignments_menu"
 
 
+async def test_options_flow_removes_multiple_chore_assignments(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test removing multiple active and inactive chore assignments."""
+    await hass.services.async_call(
+        DOMAIN,
+        "add_child",
+        {"name": "Alex"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {
+            "title": "Feed the cat",
+            "category": "Evening",
+            "points": 3,
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "set_chore_active",
+        {"chore_id": "chore_2", "active": False},
+        blocking=True,
+    )
+
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "assignments_menu")
+    assert "remove_assignment_child" in result["menu_options"]
+
+    result = await _select_menu_option(
+        hass,
+        result["flow_id"],
+        "remove_assignment_child",
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "remove_assignment_child"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"child_id": "kid_1"},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "remove_assignment_chore"
+    chore_key = next(
+        key for key in result["data_schema"].schema if key.schema == "chore_ids"
+    )
+    chore_selector = result["data_schema"].schema[chore_key]
+    assert chore_selector.config["options"] == [
+        {
+            "value": "chore_1",
+            "label": "Make the bed (Morning, 2 points, chore_1)",
+        },
+        {
+            "value": "chore_2",
+            "label": "Feed the cat (Evening, 3 points, chore_2, inactive)",
+        },
+    ]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"chore_ids": ["chore_1", "chore_2"]},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "remove_assignment_confirm"
+    assert result["description_placeholders"] == {
+        "name": "Alex",
+        "titles": "Make the bed, Feed the cat",
+        "count": "2",
+    }
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "assignments_menu"
+    assert loaded_config_entry.runtime_data.data["assignments"] == {}
+
+    entity_registry = er.async_get(hass)
+    assert entity_registry.async_get_entity_id("switch", DOMAIN, "assignment_1") is None
+    assert entity_registry.async_get_entity_id("switch", DOMAIN, "assignment_2") is None
+
+
 async def test_options_flow_shows_assignment_parent_availability(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,

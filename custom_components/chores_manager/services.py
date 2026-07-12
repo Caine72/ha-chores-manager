@@ -35,6 +35,7 @@ from .const import (
     SERVICE_DELETE_ASSIGNMENT,
     SERVICE_DELETE_CHILD,
     SERVICE_DELETE_CHORE,
+    SERVICE_REMOVE_CHORES_FROM_CHILD,
     SERVICE_SET_ASSIGNMENT_ACTIVE,
     SERVICE_SET_CHILD_ACTIVE,
     SERVICE_SET_CHORE_ACTIVE,
@@ -49,6 +50,7 @@ from .exceptions import (
     InactiveChildrenError,
     InactiveChoreError,
     InactiveChoresError,
+    MissingAssignmentsError,
     NoActiveChildrenError,
     NoChoreUpdatesError,
     UnknownAssignmentError,
@@ -405,6 +407,46 @@ async def _async_handle_assign_chores_to_child(
         ) from err
 
 
+async def _async_handle_remove_chores_from_child(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> None:
+    """Handle the atomic remove-chores-from-child action."""
+    entry = _get_loaded_entry(hass)
+
+    try:
+        assignment_ids = await entry.runtime_data.async_remove_chores_from_child(
+            call.data[ATTR_CHILD_ID],
+            call.data[ATTR_CHORE_IDS],
+        )
+    except UnknownChildError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_child",
+            translation_placeholders={"child_id": err.child_id},
+        ) from err
+    except DuplicateChoreIdsError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="duplicate_chore_ids",
+            translation_placeholders={"chore_ids": ", ".join(err.chore_ids)},
+        ) from err
+    except UnknownChoresError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_chores",
+            translation_placeholders={"chore_ids": ", ".join(err.chore_ids)},
+        ) from err
+    except MissingAssignmentsError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="missing_assignments",
+            translation_placeholders={"chore_ids": ", ".join(err.chore_ids)},
+        ) from err
+
+    _async_remove_assignment_registry_entries(hass, assignment_ids)
+
+
 async def async_setup_services(
     hass: HomeAssistant,
     config: ConfigType,
@@ -658,6 +700,13 @@ async def async_setup_services(
         SERVICE_DELETE_CHORE,
         partial(_async_handle_delete_chore, hass),
         schema=DELETE_CHORE_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REMOVE_CHORES_FROM_CHILD,
+        partial(_async_handle_remove_chores_from_child, hass),
+        schema=ASSIGN_CHORES_TO_CHILD_SCHEMA,
     )
 
     hass.services.async_register(

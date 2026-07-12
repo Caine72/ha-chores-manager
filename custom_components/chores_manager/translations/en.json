@@ -191,6 +191,20 @@
           "description": "One or more stable chore IDs to assign atomically."
         }
       }
+    },
+    "remove_chores_from_child": {
+      "name": "Remove chores from child",
+      "description": "Atomically removes one or more existing chore assignments from one child while preserving completion history.",
+      "fields": {
+        "child_id": {
+          "name": "Child ID",
+          "description": "The stable ID of the child whose assignments should be removed."
+        },
+        "chore_ids": {
+          "name": "Chore IDs",
+          "description": "One or more stable chore IDs whose assignments should be removed atomically."
+        }
+      }
     }
   },
   "exceptions": {
@@ -233,6 +247,9 @@
     "existing_assignments": {
       "message": "Assignments already exist for these chore IDs: {chore_ids}."
     },
+    "missing_assignments": {
+      "message": "Assignments do not exist for these chore IDs: {chore_ids}."
+    },
     "inactive_chores": {
       "message": "These chores are inactive: {chore_ids}."
     },
@@ -259,6 +276,7 @@
       "duplicate_chore_ids": "The chore selection contains duplicates.",
       "existing_assignments": "One or more selected chores are already assigned to this child.",
       "inactive_chores": "One or more selected chores are inactive.",
+      "missing_assignments": "One or more selected chores are no longer assigned to this child.",
       "no_children_selected": "Select at least one active child.",
       "unknown_chores": "One or more selected chores no longer exist."
     },
@@ -390,6 +408,7 @@
       "assignments_menu": {
         "menu_options": {
           "add_assignment_child": "Assign chores to child",
+          "remove_assignment_child": "Remove chores from child",
           "select_assignment": "Manage an existing assignment",
           "init": "\u2190 Back to main menu"
         },
@@ -415,6 +434,27 @@
         "description": "Assign {count} chore(s) to {name}?\n\n{titles}",
         "title": "Assign chores",
         "submit": "Assign chores"
+      },
+      "remove_assignment_child": {
+        "data": {
+          "child_id": "Child"
+        },
+        "description": "Only children with existing assignments are shown. Active and inactive children are included.",
+        "title": "Choose child",
+        "submit": "Select child"
+      },
+      "remove_assignment_chore": {
+        "data": {
+          "chore_ids": "Chores"
+        },
+        "description": "Child: {name}\n\nSelect one or more currently assigned chores. Active and inactive chores are included.",
+        "title": "Choose chores",
+        "submit": "Select chores"
+      },
+      "remove_assignment_confirm": {
+        "description": "Remove {count} chore assignment(s) from {name}? Their switch entities will be removed and completion history will be kept.\n\n{titles}",
+        "title": "Remove chores",
+        "submit": "Remove chores"
       },
       "assignment_unavailable": {
         "title": "Cannot add assignment",

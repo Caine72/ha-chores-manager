@@ -23,6 +23,7 @@ from .exceptions import (
     InactiveChildrenError,
     InactiveChoreError,
     InactiveChoresError,
+    MissingAssignmentsError,
     NoActiveChildrenError,
     NoChoreUpdatesError,
     UnknownAssignmentError,
@@ -425,6 +426,53 @@ class ChoresManagerStore:
 
             self._delete_assignment_data(assignment_id)
             await self.async_save()
+
+    async def async_remove_chores_from_child(
+        self,
+        child_id: str,
+        chore_ids: list[str],
+    ) -> list[str]:
+        """Atomically remove selected chore assignments from one child."""
+        async with self._lock:
+            if child_id not in self.data["children"]:
+                raise UnknownChildError(child_id)
+
+            duplicate_chore_ids = sorted(
+                {chore_id for chore_id in chore_ids if chore_ids.count(chore_id) > 1}
+            )
+            if duplicate_chore_ids:
+                raise DuplicateChoreIdsError(duplicate_chore_ids)
+
+            unknown_chore_ids = [
+                chore_id
+                for chore_id in chore_ids
+                if chore_id not in self.data["chores"]
+            ]
+            if unknown_chore_ids:
+                raise UnknownChoresError(unknown_chore_ids)
+
+            assignment_ids_by_chore = {
+                assignment["chore_id"]: assignment_id
+                for assignment_id, assignment in self.data["assignments"].items()
+                if assignment["child_id"] == child_id
+            }
+            missing_chore_ids = [
+                chore_id
+                for chore_id in chore_ids
+                if chore_id not in assignment_ids_by_chore
+            ]
+            if missing_chore_ids:
+                raise MissingAssignmentsError(missing_chore_ids)
+
+            assignment_ids = [
+                assignment_ids_by_chore[chore_id] for chore_id in chore_ids
+            ]
+            for assignment_id in assignment_ids:
+                self._delete_assignment_data(assignment_id)
+
+            await self.async_save()
+
+        return assignment_ids
 
     async def async_delete_child(
         self,

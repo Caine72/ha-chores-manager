@@ -110,6 +110,15 @@ class ExistingAssignmentsError(ChoresManagerError):
         super().__init__(", ".join(chore_ids))
 
 
+class MissingAssignmentsError(ChoresManagerError):
+    """Raised when requested child-to-chore assignments do not exist."""
+
+    def __init__(self, chore_ids: list[str]) -> None:
+        """Initialize the exception."""
+        self.chore_ids = chore_ids
+        super().__init__(", ".join(chore_ids))
+
+
 class InactiveChoresError(ChoresManagerError):
     """Raised when one or more selected chores are inactive."""
 
