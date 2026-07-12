@@ -90,3 +90,48 @@ class UnknownChoreError(ChoresManagerError):
         """Initialize the exception."""
         self.chore_id = chore_id
         super().__init__(chore_id)
+
+
+class DuplicateChoreIdsError(ChoresManagerError):
+    """Raised when a bulk request repeats one or more chore IDs."""
+
+    def __init__(self, chore_ids: list[str]) -> None:
+        """Initialize the exception."""
+        self.chore_ids = chore_ids
+        super().__init__(", ".join(chore_ids))
+
+
+class ExistingAssignmentsError(ChoresManagerError):
+    """Raised when bulk assignment relationships already exist."""
+
+    def __init__(self, chore_ids: list[str]) -> None:
+        """Initialize the exception."""
+        self.chore_ids = chore_ids
+        super().__init__(", ".join(chore_ids))
+
+
+class MissingAssignmentsError(ChoresManagerError):
+    """Raised when requested child-to-chore assignments do not exist."""
+
+    def __init__(self, chore_ids: list[str]) -> None:
+        """Initialize the exception."""
+        self.chore_ids = chore_ids
+        super().__init__(", ".join(chore_ids))
+
+
+class InactiveChoresError(ChoresManagerError):
+    """Raised when one or more selected chores are inactive."""
+
+    def __init__(self, chore_ids: list[str]) -> None:
+        """Initialize the exception."""
+        self.chore_ids = chore_ids
+        super().__init__(", ".join(chore_ids))
+
+
+class UnknownChoresError(ChoresManagerError):
+    """Raised when one or more chore IDs do not exist."""
+
+    def __init__(self, chore_ids: list[str]) -> None:
+        """Initialize the exception."""
+        self.chore_ids = chore_ids
+        super().__init__(", ".join(chore_ids))

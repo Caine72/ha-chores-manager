@@ -114,6 +114,12 @@ async def test_options_flow_manages_chore_lifecycle(
         {"name": "Alex"},
         blocking=True,
     )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_child",
+        {"name": "Isabelle"},
+        blocking=True,
+    )
 
     result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
     result = await _select_menu_option(hass, result["flow_id"], "chores_menu")
@@ -123,6 +129,15 @@ async def test_options_flow_manages_chore_lifecycle(
     result = await _select_menu_option(hass, result["flow_id"], "add_chore")
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "add_chore"
+    child_ids_key = next(
+        key for key in result["data_schema"].schema if key.schema == "child_ids"
+    )
+    child_selector = result["data_schema"].schema[child_ids_key]
+    assert child_ids_key.default() == ["kid_1", "kid_2"]
+    assert child_selector.config["options"] == [
+        {"value": "kid_1", "label": "Alex (kid_1)"},
+        {"value": "kid_2", "label": "Isabelle (kid_2)"},
+    ]
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -130,6 +145,7 @@ async def test_options_flow_manages_chore_lifecycle(
             "title": "Make the bed",
             "category": "Morning",
             "points": 2,
+            "child_ids": ["kid_2"],
             "advanced_chore_options": {"icon": "mdi:bed"},
         },
     )
@@ -142,6 +158,13 @@ async def test_options_flow_manages_chore_lifecycle(
         "active": True,
         "sort_order": 10,
         "completion_mode": "independent",
+    }
+    assert loaded_config_entry.runtime_data.data["assignments"] == {
+        "assignment_1": {
+            "child_id": "kid_2",
+            "chore_id": "chore_1",
+            "active": True,
+        }
     }
 
     result = await _select_menu_option(hass, result["flow_id"], "select_chore")
@@ -209,7 +232,7 @@ async def test_options_flow_add_chore_requires_active_child(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,
 ) -> None:
-    """Test the options flow reports the existing no-active-children error."""
+    """Test the options flow requires at least one selected active child."""
     result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
     result = await _select_menu_option(hass, result["flow_id"], "chores_menu")
     result = await _select_menu_option(hass, result["flow_id"], "add_chore")
@@ -226,7 +249,7 @@ async def test_options_flow_add_chore_requires_active_child(
 
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "add_chore"
-    assert result["errors"] == {"base": "no_active_children"}
+    assert result["errors"] == {"base": "no_children_selected"}
 
 
 async def test_options_flow_manages_assignment_lifecycle(
@@ -247,6 +270,16 @@ async def test_options_flow_manages_assignment_lifecycle(
             "title": "Make the bed",
             "category": "Morning",
             "points": 2,
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {
+            "title": "Feed the cat",
+            "category": "Evening",
+            "points": 3,
         },
         blocking=True,
     )
@@ -286,34 +319,45 @@ async def test_options_flow_manages_assignment_lifecycle(
     assert result["step_id"] == "add_assignment_chore"
     assert result["description_placeholders"] == {"name": "Isabelle"}
     chore_key = next(
-        key for key in result["data_schema"].schema if key.schema == "chore_id"
+        key for key in result["data_schema"].schema if key.schema == "chore_ids"
     )
     chore_selector = result["data_schema"].schema[chore_key]
     assert chore_selector.config["options"] == [
         {
             "value": "chore_1",
             "label": "Make the bed (Morning, 2 points, chore_1)",
-        }
+        },
+        {
+            "value": "chore_2",
+            "label": "Feed the cat (Evening, 3 points, chore_2)",
+        },
     ]
+    assert chore_selector.config["multiple"] is True
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={"chore_id": "chore_1"},
+        user_input={"chore_ids": ["chore_1", "chore_2"]},
     )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "add_assignment_confirm"
     assert result["description_placeholders"] == {
         "name": "Isabelle",
-        "title": "Make the bed",
+        "titles": "Make the bed, Feed the cat",
+        "count": "2",
     }
 
     result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "assignments_menu"
-    assert loaded_config_entry.runtime_data.data["assignments"]["assignment_2"] == {
+    assert loaded_config_entry.runtime_data.data["assignments"]["assignment_3"] == {
         "child_id": "kid_2",
         "chore_id": "chore_1",
+        "active": True,
+    }
+    assert loaded_config_entry.runtime_data.data["assignments"]["assignment_4"] == {
+        "child_id": "kid_2",
+        "chore_id": "chore_2",
         "active": True,
     }
 
@@ -322,7 +366,7 @@ async def test_options_flow_manages_assignment_lifecycle(
         entity_registry.async_get_entity_id(
             "switch",
             DOMAIN,
-            "assignment_2",
+            "assignment_3",
         )
         == "switch.kid_2_chore_1"
     )
@@ -331,14 +375,14 @@ async def test_options_flow_manages_assignment_lifecycle(
     assert result["type"] is FlowResultType.FORM
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={"assignment_id": "assignment_2"},
+        user_input={"assignment_id": "assignment_3"},
     )
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "assignment_actions"
     assert result["description_placeholders"] == {
         "name": "Isabelle",
         "title": "Make the bed",
-        "assignment_id": "assignment_2",
+        "assignment_id": "assignment_3",
         "status": "Active",
         "availability": "Switch available",
     }
@@ -371,8 +415,8 @@ async def test_options_flow_manages_assignment_lifecycle(
     result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "assignments_menu"
-    assert "assignment_2" not in loaded_config_entry.runtime_data.data["assignments"]
-    assert entity_registry.async_get_entity_id("switch", DOMAIN, "assignment_2") is None
+    assert "assignment_3" not in loaded_config_entry.runtime_data.data["assignments"]
+    assert entity_registry.async_get_entity_id("switch", DOMAIN, "assignment_3") is None
 
 
 async def test_options_flow_explains_when_no_assignment_pair_is_available(
@@ -408,6 +452,100 @@ async def test_options_flow_explains_when_no_assignment_pair_is_available(
     result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "assignments_menu"
+
+
+async def test_options_flow_removes_multiple_chore_assignments(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test removing multiple active and inactive chore assignments."""
+    await hass.services.async_call(
+        DOMAIN,
+        "add_child",
+        {"name": "Alex"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {
+            "title": "Feed the cat",
+            "category": "Evening",
+            "points": 3,
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "set_chore_active",
+        {"chore_id": "chore_2", "active": False},
+        blocking=True,
+    )
+
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "assignments_menu")
+    assert "remove_assignment_child" in result["menu_options"]
+
+    result = await _select_menu_option(
+        hass,
+        result["flow_id"],
+        "remove_assignment_child",
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "remove_assignment_child"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"child_id": "kid_1"},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "remove_assignment_chore"
+    chore_key = next(
+        key for key in result["data_schema"].schema if key.schema == "chore_ids"
+    )
+    chore_selector = result["data_schema"].schema[chore_key]
+    assert chore_selector.config["options"] == [
+        {
+            "value": "chore_1",
+            "label": "Make the bed (Morning, 2 points, chore_1)",
+        },
+        {
+            "value": "chore_2",
+            "label": "Feed the cat (Evening, 3 points, chore_2, inactive)",
+        },
+    ]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"chore_ids": ["chore_1", "chore_2"]},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "remove_assignment_confirm"
+    assert result["description_placeholders"] == {
+        "name": "Alex",
+        "titles": "Make the bed, Feed the cat",
+        "count": "2",
+    }
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "assignments_menu"
+    assert loaded_config_entry.runtime_data.data["assignments"] == {}
+
+    entity_registry = er.async_get(hass)
+    assert entity_registry.async_get_entity_id("switch", DOMAIN, "assignment_1") is None
+    assert entity_registry.async_get_entity_id("switch", DOMAIN, "assignment_2") is None
 
 
 async def test_options_flow_shows_assignment_parent_availability(

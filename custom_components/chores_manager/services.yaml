@@ -82,6 +82,40 @@ add_assignment:
       selector:
         text:
 
+assign_chores_to_child:
+  fields:
+    child_id:
+      required: true
+      example: kid_2
+      selector:
+        text:
+
+    chore_ids:
+      required: true
+      example:
+        - chore_1
+        - chore_2
+      selector:
+        text:
+          multiple: true
+
+remove_chores_from_child:
+  fields:
+    child_id:
+      required: true
+      example: kid_2
+      selector:
+        text:
+
+    chore_ids:
+      required: true
+      example:
+        - chore_1
+        - chore_2
+      selector:
+        text:
+          multiple: true
+
 set_assignment_active:
   fields:
     assignment_id:

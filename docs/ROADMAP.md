@@ -118,7 +118,7 @@ Before v0.2 release preparation, improve setup efficiency without adding bulk cr
 
 The Add chore form should expose the existing `child_ids` capability as an active-children multi-select. All active children are selected by default, preserving current behavior, while the user may choose a smaller subset before creating the chore.
 
-For existing chores, replace single assignment creation with Assign chores to child: select one active child, select one or more eligible active chores, confirm the batch, and create every relationship atomically. A one-item selection preserves the existing workflow. Backend validation must reject the full batch before mutation if any relationship is unknown, inactive, duplicated, or already present.
+For existing chores, replace single assignment creation with Assign chores to child: select one active child, select one or more eligible active chores, confirm the batch, and create every relationship atomically. Add the symmetric Remove chores from child flow for deleting one or more existing relationships while preserving completion history. Backend validation must reject either full batch before mutation if any requested relationship is invalid.
 
 Do not add a separate one-chore-to-many-existing-children workflow or bulk chore-record creation in this milestone.
 

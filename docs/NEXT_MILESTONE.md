@@ -2,7 +2,7 @@
 
 ## Goal
 
-Improve native setup efficiency without adding bulk chore-record creation. The milestone covers assigning existing chores in bulk to one child and exposing the backend's existing child selection when creating one new chore.
+Improve native setup efficiency without adding bulk chore-record creation. The milestone covers assigning and removing existing chores in bulk for one child and exposing the backend's existing child selection when creating one new chore.
 
 The options flow remains a user interface over integration-owned storage and backend actions. Stable IDs, validation, entity creation, and completion history remain backend responsibilities.
 
@@ -28,6 +28,16 @@ The options flow remains a user interface over integration-owned storage and bac
 8. Explain when no active child, active chore, or eligible relationship remains.
 9. Keep Manage existing assignment unchanged.
 
+## Required existing-chore bulk removal
+
+1. Add Remove chores from child beside Assign chores to child.
+2. Select one child that currently has assignments.
+3. Show a multi-select containing every chore assigned to that child, including inactive relationships and parents.
+4. Allow one or more chores to be selected and show a confirmation with the child, chore names, and count.
+5. Remove all selected relationships atomically, remove their switch registry entries, and preserve completion snapshots.
+6. Reject the complete request before mutation for an unknown child, unknown chore, duplicate chore ID, or missing relationship.
+7. Keep single-assignment management available for activation, deactivation, and focused deletion.
+
 ## Backend requirements
 
 1. Add an `assign_chores_to_child` action with `child_id` and non-empty `chore_ids`.
@@ -37,10 +47,11 @@ The options flow remains a user interface over integration-owned storage and bac
 5. On success, allocate monotonic assignment IDs, save once, and let existing listeners create switch entities and labels.
 6. Preserve the existing `add_assignment` action for compatibility.
 7. Keep storage version 1 and the read-only inventory contract unchanged.
+8. Add a symmetric atomic remove_chores_from_child action that returns deleted assignment IDs for registry cleanup.
 
 ## Carried-forward UX decisions
 
-- Use exact verbs: Select child, Select chores, Assign chores, and Add chore.
+- Use exact verbs: Select child, Select chores, Assign chores, Remove chores, and Add chore.
 - Keep one-level back navigation.
 - Use static translated titles and dynamic descriptions.
 - Filter invalid choices before submission while retaining authoritative backend validation.
@@ -71,6 +82,7 @@ Manual Home Assistant acceptance must cover the default-all child selection, a r
 - A new chore can be assigned to an explicit subset of active children from Configure.
 - All active children remain selected by default.
 - One or more existing chores can be assigned atomically to one active child.
+- One or more existing chore assignments can be removed atomically from one child.
 - Rejected batches cause no partial mutation or stable-ID consumption.
 - Existing single-assignment callers remain compatible.
 - Focused tests and full validation pass.

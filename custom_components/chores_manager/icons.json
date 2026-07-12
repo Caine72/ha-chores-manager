@@ -32,6 +32,12 @@
     },
     "set_chore_active": {
       "service": "mdi:playlist-edit"
+    },
+    "assign_chores_to_child": {
+      "service": "mdi:link-plus"
+    },
+    "remove_chores_from_child": {
+      "service": "mdi:link-variant-remove"
     }
   }
 }
