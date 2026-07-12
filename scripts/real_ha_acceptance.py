@@ -2,6 +2,7 @@
 """Run automated real-HA acceptance checks for Chores Manager."""
 
 import argparse
+import asyncio
 import json
 import sqlite3
 import time
@@ -12,6 +13,9 @@ from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
+
+from aiohttp import ClientSession
 
 
 class AcceptanceFailure(AssertionError):
@@ -84,6 +88,60 @@ def call_service(
     )
     time.sleep(0.35)
     return result
+
+
+async def _async_websocket_request(
+    *,
+    base_url: str,
+    token: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Authenticate and execute one Home Assistant WebSocket command."""
+    parsed_url = urlsplit(base_url)
+    websocket_url = urlunsplit(
+        (
+            "wss" if parsed_url.scheme == "https" else "ws",
+            parsed_url.netloc,
+            "/api/websocket",
+            "",
+            "",
+        )
+    )
+
+    async with ClientSession() as session, session.ws_connect(websocket_url) as socket:
+        greeting = await socket.receive_json(timeout=20)
+        if greeting.get("type") != "auth_required":
+            raise AcceptanceFailure(f"WebSocket greeting failed: {greeting!r}")
+
+        await socket.send_json({"type": "auth", "access_token": token})
+        auth_response = await socket.receive_json(timeout=20)
+        if auth_response.get("type") != "auth_ok":
+            raise AcceptanceFailure(
+                f"WebSocket authentication failed: {auth_response!r}"
+            )
+
+        await socket.send_json({"id": 1, **payload})
+        response = await socket.receive_json(timeout=20)
+        if not response.get("success"):
+            raise AcceptanceFailure(f"WebSocket command failed: {response!r}")
+
+        return response["result"]
+
+
+def websocket_request(
+    *,
+    base_url: str,
+    token: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Execute one authenticated Home Assistant WebSocket command."""
+    return asyncio.run(
+        _async_websocket_request(
+            base_url=base_url,
+            token=token,
+            payload=payload,
+        )
+    )
 
 
 def get_states(*, base_url: str, token: str) -> dict[str, dict[str, Any]]:
@@ -562,6 +620,86 @@ def run_acceptance(
     )
     snapshots.append(snapshot("add chores and assignments", tracked_entity_ids, tracked_ids))
 
+    correction_history = websocket_request(
+        base_url=base_url,
+        token=token,
+        payload={"type": "chores_manager/current_week_completions"},
+    )
+    correction_date = correction_history["window"]["end"]
+    correction_result = websocket_request(
+        base_url=base_url,
+        token=token,
+        payload={
+            "type": "chores_manager/set_current_week_completion",
+            "assignment_id": alex_bed_assignment,
+            "local_date": correction_date,
+            "completed": True,
+        },
+    )
+    assert_true(
+        correction_result["changed"],
+        "current-week correction did not create a completion",
+    )
+    correction_completion_id = correction_result["completion_id"]
+    assert_true(
+        correction_completion_id is not None,
+        "current-week correction did not return a completion ID",
+    )
+    tracked_ids["correction_completion"] = correction_completion_id
+    wait_until(
+        "correction completion entity updates",
+        lambda: get_states(base_url=base_url, token=token)
+        .get(alex_bed_switch, {})
+        .get("state")
+        == "on"
+        and get_states(base_url=base_url, token=token)
+        .get(alex_sensor, {})
+        .get("state")
+        == "2",
+    )
+    correction_history = websocket_request(
+        base_url=base_url,
+        token=token,
+        payload={"type": "chores_manager/current_week_completions"},
+    )
+    assert_true(
+        any(
+            completion["completion_id"] == correction_completion_id
+            and completion["assignment_id"] == alex_bed_assignment
+            and completion["local_date"] == correction_date
+            for completion in correction_history["completions"]
+        ),
+        "current-week correction history did not return the new completion",
+    )
+    correction_result = websocket_request(
+        base_url=base_url,
+        token=token,
+        payload={
+            "type": "chores_manager/set_current_week_completion",
+            "assignment_id": alex_bed_assignment,
+            "local_date": correction_date,
+            "completed": False,
+        },
+    )
+    assert_true(
+        correction_result["changed"],
+        "current-week correction did not remove the completion",
+    )
+    wait_until(
+        "correction removal entity updates",
+        lambda: get_states(base_url=base_url, token=token)
+        .get(alex_bed_switch, {})
+        .get("state")
+        == "off"
+        and get_states(base_url=base_url, token=token)
+        .get(alex_sensor, {})
+        .get("state")
+        == "0",
+    )
+    snapshots.append(
+        snapshot("current-week completion correction", tracked_entity_ids, tracked_ids)
+    )
+
     call_service(
         base_url=base_url,
         token=token,
@@ -797,6 +935,11 @@ def run_acceptance(
             "criterion": "Bulk assignment and removal are atomic",
             "result": "PASS",
             "evidence": "Two Blake relationships were added, removed from storage/state/registry, and recreated with newer stable IDs.",
+        },
+        {
+            "criterion": "Admin current-week correction is live and reversible",
+            "result": "PASS",
+            "evidence": "WebSocket history and correction commands created and removed an Alex-bed completion while switch state and weekly points updated.",
         },
         {
             "criterion": "Delete removes targeted live structure/entities only",

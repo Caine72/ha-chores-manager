@@ -44,5 +44,7 @@ Artifacts are written to `HA_ACCEPTANCE_OUTPUT_DIR`.
 ## Notes
 
 - The workflow intentionally mutates live chores_manager structure unless `--keep-structure` is used.
+- The runner uses the Home Assistant development environment's `aiohttp` installation to exercise the admin WebSocket correction contract.
+- It verifies current-week correction history, add/remove correction behavior, live switch state, and weekly-points updates.
 - Midnight/Friday rollover/retention remain covered by automated pytest in `tests/components/chores_manager/test_midnight.py`.
 - `docs/REAL_HA_ACCEPTANCE_REPORT.md` is intentionally ignored and can be used as a local manual artifact only.
