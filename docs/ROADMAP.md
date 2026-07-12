@@ -135,6 +135,10 @@ The analysis must distinguish:
 
 A likely desktop presentation is a chore-by-child matrix or compact table. Mobile should use child-grouped or chore-grouped lists rather than compressing the matrix. The inventory WebSocket contract supplies structural data, while assignment entity states supply live completion state. Do not build this overview as part of assignment management.
 
+## Current milestone: current-week correction history
+
+The separate admin card needs supported access to completion history for correcting the current chore week. The integration must expose an admin-only read model for completion snapshots from the current Saturday-Friday week through today, while keeping the retained previous week read-only. It must use stable IDs and include orphan history whose assignment was later deleted. This contract is separate from structural inventory and introduces no card code or mutation in its first milestone.
+
 ## Integration-aware custom card
 
 The custom card will not be built in this repository. Add a link to the separate card repository here once that repository is available.

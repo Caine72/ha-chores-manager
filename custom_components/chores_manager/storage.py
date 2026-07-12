@@ -721,6 +721,23 @@ class ChoresManagerStore:
             and week_start <= date.fromisoformat(completion["local_date"]) <= week_end
         )
 
+    def get_current_week_completions(self) -> list[tuple[str, CompletionData]]:
+        """Return retained completion snapshots correctable during the current week."""
+        today = dt_util.now().date()
+        week_start, _ = self.get_current_week_bounds(today)
+
+        return sorted(
+            (
+                (completion_id, completion)
+                for completion_id, completion in self.data["completions"].items()
+                if week_start <= date.fromisoformat(completion["local_date"]) <= today
+            ),
+            key=lambda item: (
+                item[1]["local_date"],
+                int(item[0].removeprefix("completion_")),
+            ),
+        )
+
     def _prune_old_completions(self, reference_date: date) -> bool:
         """Remove completions older than the retained two chore weeks."""
         current_week_start, _ = self.get_current_week_bounds(reference_date)
