@@ -15,7 +15,9 @@ from .const import (
     ATTR_ASSIGNMENT_ID,
     ATTR_CATEGORY,
     ATTR_CHILD_ID,
+    ATTR_CHILD_IDS,
     ATTR_CHORE_ID,
+    ATTR_CHORE_IDS,
     ATTR_ICON,
     ATTR_NAME,
     ATTR_POINTS,
@@ -24,9 +26,9 @@ from .const import (
     DEFAULT_CHORE_ICON,
     DOMAIN,
     NAME,
-    SERVICE_ADD_ASSIGNMENT,
     SERVICE_ADD_CHILD,
     SERVICE_ADD_CHORE,
+    SERVICE_ASSIGN_CHORES_TO_CHILD,
     SERVICE_DELETE_ASSIGNMENT,
     SERVICE_DELETE_CHILD,
     SERVICE_DELETE_CHORE,
@@ -82,7 +84,7 @@ class ChoresManagerOptionsFlow(OptionsFlow):
     """Manage Chores Manager data through Home Assistant's options UI."""
 
     _pending_assignment_child_id: str | None = None
-    _pending_assignment_chore_id: str | None = None
+    _pending_assignment_chore_ids: list[str] | None = None
     _selected_assignment_id: str | None = None
     _selected_child_id: str | None = None
     _selected_chore_id: str | None = None
@@ -134,6 +136,20 @@ class ChoresManagerOptionsFlow(OptionsFlow):
                 self._store.data["children"].items(),
                 key=lambda item: _stable_id_sort_key(item[0]),
             )
+        ]
+
+    def _active_child_options(self) -> list[selector.SelectOptionDict]:
+        """Return active children for new chore assignment selection."""
+        return [
+            selector.SelectOptionDict(
+                value=child_id,
+                label=f"{child['name']} ({child_id})",
+            )
+            for child_id, child in sorted(
+                self._store.data["children"].items(),
+                key=lambda item: _stable_id_sort_key(item[0]),
+            )
+            if child["active"]
         ]
 
     def _category_options(self) -> list[str]:
@@ -467,16 +483,19 @@ class ChoresManagerOptionsFlow(OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Add a chore for all active children."""
+        """Add a chore for selected active children."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            error = await self._async_call_action(
-                SERVICE_ADD_CHORE,
-                self._chore_action_data(user_input),
-            )
-            if error is None:
-                return await self.async_step_chores_menu()
-            errors["base"] = error
+            if not user_input[ATTR_CHILD_IDS]:
+                errors["base"] = "no_children_selected"
+            else:
+                error = await self._async_call_action(
+                    SERVICE_ADD_CHORE,
+                    self._chore_action_data(user_input),
+                )
+                if error is None:
+                    return await self.async_step_chores_menu()
+                errors["base"] = error
 
         return self.async_show_form(
             step_id="add_chore",
@@ -674,7 +693,7 @@ class ChoresManagerOptionsFlow(OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Select an available active chore for a new assignment."""
+        """Select available active chores for one child."""
         child_id = self._pending_assignment_child_id
         child = self._store.data["children"].get(child_id) if child_id else None
         if child is None or not child["active"]:
@@ -687,18 +706,30 @@ class ChoresManagerOptionsFlow(OptionsFlow):
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            chore_id = user_input[ATTR_CHORE_ID]
-            if any(option["value"] == chore_id for option in options):
-                self._pending_assignment_chore_id = chore_id
+            chore_ids = user_input[ATTR_CHORE_IDS]
+            option_ids = {option["value"] for option in options}
+            if (
+                chore_ids
+                and len(chore_ids) == len(set(chore_ids))
+                and set(chore_ids) <= option_ids
+            ):
+                self._pending_assignment_chore_ids = chore_ids
                 return await self.async_step_add_assignment_confirm()
-            errors["base"] = "unknown_chore"
+            errors["base"] = "unknown_chores"
 
         return self.async_show_form(
             step_id="add_assignment_chore",
-            data_schema=self._chore_selector_schema(options),
-            description_placeholders={
-                "name": child["name"],
-            },
+            data_schema=vol.Schema(
+                {
+                    vol.Required(ATTR_CHORE_IDS): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            multiple=True,
+                        )
+                    )
+                }
+            ),
+            description_placeholders={"name": child["name"]},
             errors=errors,
         )
 
@@ -706,23 +737,25 @@ class ChoresManagerOptionsFlow(OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Confirm creation of the selected assignment relationship."""
+        """Confirm atomic creation of selected assignment relationships."""
         child_id = self._pending_assignment_child_id
-        chore_id = self._pending_assignment_chore_id
+        chore_ids = self._pending_assignment_chore_ids
         child = self._store.data["children"].get(child_id) if child_id else None
-        chore = self._store.data["chores"].get(chore_id) if chore_id else None
-        if child is None or chore is None:
+        chores = [
+            self._store.data["chores"].get(chore_id) for chore_id in (chore_ids or [])
+        ]
+        if child is None or not chores or any(chore is None for chore in chores):
             return await self.async_step_assignments_menu()
 
         errors: dict[str, str] = {}
         if user_input is not None:
             error = await self._async_call_action(
-                SERVICE_ADD_ASSIGNMENT,
-                {ATTR_CHILD_ID: child_id, ATTR_CHORE_ID: chore_id},
+                SERVICE_ASSIGN_CHORES_TO_CHILD,
+                {ATTR_CHILD_ID: child_id, ATTR_CHORE_IDS: chore_ids},
             )
             if error is None:
                 self._pending_assignment_child_id = None
-                self._pending_assignment_chore_id = None
+                self._pending_assignment_chore_ids = None
                 return await self.async_step_assignments_menu()
             errors["base"] = error
 
@@ -731,7 +764,10 @@ class ChoresManagerOptionsFlow(OptionsFlow):
             data_schema=vol.Schema({}),
             description_placeholders={
                 "name": child["name"],
-                "title": chore["title"],
+                "titles": ", ".join(
+                    chore["title"] for chore in chores if chore is not None
+                ),
+                "count": str(len(chores)),
             },
             errors=errors,
         )
@@ -926,6 +962,20 @@ class ChoresManagerOptionsFlow(OptionsFlow):
                 SectionConfig(collapsed=True),
             ),
         }
+
+        if chore is None:
+            child_options = self._active_child_options()
+            schema[
+                vol.Required(
+                    ATTR_CHILD_IDS,
+                    default=[option["value"] for option in child_options],
+                )
+            ] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=child_options,
+                    multiple=True,
+                )
+            )
 
         return vol.Schema(schema)
 

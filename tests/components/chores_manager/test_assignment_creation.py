@@ -127,6 +127,104 @@ async def test_add_assignment_creates_stable_switch_and_label(
     ]
 
 
+async def test_assign_chores_to_child_creates_all_relationships(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test assigning multiple existing chores to one child."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+            "child_ids": ["kid_1"],
+        },
+    )
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Feed the cat",
+            "category": "Evening",
+            "points": 3,
+            "child_ids": ["kid_1"],
+        },
+    )
+    await _call_action(hass, "add_child", {"name": "Isabelle"})
+
+    await _call_action(
+        hass,
+        "assign_chores_to_child",
+        {
+            "child_id": "kid_2",
+            "chore_ids": ["chore_1", "chore_2"],
+        },
+    )
+
+    store = loaded_config_entry.runtime_data
+    assert store.data["assignments"]["assignment_3"] == {
+        "child_id": "kid_2",
+        "chore_id": "chore_1",
+        "active": True,
+    }
+    assert store.data["assignments"]["assignment_4"] == {
+        "child_id": "kid_2",
+        "chore_id": "chore_2",
+        "active": True,
+    }
+    assert store.data["next_assignment_id"] == 5
+    assert hass.states.get("switch.kid_2_chore_1") is not None
+    assert hass.states.get("switch.kid_2_chore_2") is not None
+
+
+async def test_assign_chores_to_child_rejects_batch_atomically(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test one existing relationship rejects the whole bulk request."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+            "child_ids": ["kid_1"],
+        },
+    )
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Feed the cat",
+            "category": "Evening",
+            "points": 3,
+            "child_ids": ["kid_1"],
+        },
+    )
+
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await hass.services.async_call(
+            DOMAIN,
+            "assign_chores_to_child",
+            {
+                "child_id": "kid_1",
+                "chore_ids": ["chore_2", "chore_1"],
+            },
+            blocking=True,
+        )
+
+    assert exc_info.value.translation_key == "existing_assignments"
+    assert exc_info.value.translation_placeholders == {"chore_ids": "chore_2, chore_1"}
+    store = loaded_config_entry.runtime_data
+    assert list(store.data["assignments"]) == ["assignment_1", "assignment_2"]
+    assert store.data["next_assignment_id"] == 3
+
+
 async def test_added_assignment_completes_independently_and_preserves_history(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,

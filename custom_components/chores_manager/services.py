@@ -20,6 +20,7 @@ from .const import (
     ATTR_CHILD_ID,
     ATTR_CHILD_IDS,
     ATTR_CHORE_ID,
+    ATTR_CHORE_IDS,
     ATTR_ICON,
     ATTR_NAME,
     ATTR_POINTS,
@@ -30,6 +31,7 @@ from .const import (
     SERVICE_ADD_ASSIGNMENT,
     SERVICE_ADD_CHILD,
     SERVICE_ADD_CHORE,
+    SERVICE_ASSIGN_CHORES_TO_CHILD,
     SERVICE_DELETE_ASSIGNMENT,
     SERVICE_DELETE_CHILD,
     SERVICE_DELETE_CHORE,
@@ -41,15 +43,19 @@ from .const import (
 )
 from .exceptions import (
     DuplicateAssignmentError,
+    DuplicateChoreIdsError,
+    ExistingAssignmentsError,
     InactiveChildError,
     InactiveChildrenError,
     InactiveChoreError,
+    InactiveChoresError,
     NoActiveChildrenError,
     NoChoreUpdatesError,
     UnknownAssignmentError,
     UnknownChildError,
     UnknownChildrenError,
     UnknownChoreError,
+    UnknownChoresError,
 )
 from .models import ChoresManagerConfigEntry
 
@@ -63,6 +69,27 @@ ADD_ASSIGNMENT_SCHEMA = vol.Schema(
         vol.Required(ATTR_CHORE_ID): vol.All(
             cv.string,
             str.strip,
+            vol.Length(min=1),
+        ),
+    }
+)
+
+ASSIGN_CHORES_TO_CHILD_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CHILD_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+        vol.Required(ATTR_CHORE_IDS): vol.All(
+            cv.ensure_list,
+            [
+                vol.All(
+                    cv.string,
+                    str.strip,
+                    vol.Length(min=1),
+                )
+            ],
             vol.Length(min=1),
         ),
     }
@@ -328,6 +355,56 @@ async def _async_handle_delete_chore(
     _async_remove_assignment_registry_entries(hass, assignment_ids)
 
 
+async def _async_handle_assign_chores_to_child(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> None:
+    """Handle the atomic assign-chores-to-child action."""
+    entry = _get_loaded_entry(hass)
+
+    try:
+        await entry.runtime_data.async_assign_chores_to_child(
+            call.data[ATTR_CHILD_ID],
+            call.data[ATTR_CHORE_IDS],
+        )
+    except UnknownChildError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_child",
+            translation_placeholders={"child_id": err.child_id},
+        ) from err
+    except InactiveChildError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="inactive_child",
+            translation_placeholders={"child_id": err.child_id},
+        ) from err
+    except DuplicateChoreIdsError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="duplicate_chore_ids",
+            translation_placeholders={"chore_ids": ", ".join(err.chore_ids)},
+        ) from err
+    except UnknownChoresError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_chores",
+            translation_placeholders={"chore_ids": ", ".join(err.chore_ids)},
+        ) from err
+    except InactiveChoresError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="inactive_chores",
+            translation_placeholders={"chore_ids": ", ".join(err.chore_ids)},
+        ) from err
+    except ExistingAssignmentsError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="existing_assignments",
+            translation_placeholders={"chore_ids": ", ".join(err.chore_ids)},
+        ) from err
+
+
 async def async_setup_services(
     hass: HomeAssistant,
     config: ConfigType,
@@ -532,6 +609,13 @@ async def async_setup_services(
         SERVICE_ADD_ASSIGNMENT,
         async_handle_add_assignment,
         schema=ADD_ASSIGNMENT_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ASSIGN_CHORES_TO_CHILD,
+        partial(_async_handle_assign_chores_to_child, hass),
+        schema=ASSIGN_CHORES_TO_CHILD_SCHEMA,
     )
 
     hass.services.async_register(

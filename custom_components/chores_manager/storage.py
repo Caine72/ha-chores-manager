@@ -17,15 +17,19 @@ from .const import (
 )
 from .exceptions import (
     DuplicateAssignmentError,
+    DuplicateChoreIdsError,
+    ExistingAssignmentsError,
     InactiveChildError,
     InactiveChildrenError,
     InactiveChoreError,
+    InactiveChoresError,
     NoActiveChildrenError,
     NoChoreUpdatesError,
     UnknownAssignmentError,
     UnknownChildError,
     UnknownChildrenError,
     UnknownChoreError,
+    UnknownChoresError,
 )
 
 type StoreListener = Callable[[], None]
@@ -336,6 +340,60 @@ class ChoresManagerStore:
             await self.async_save()
 
         return assignment_id
+
+    async def async_assign_chores_to_child(
+        self,
+        child_id: str,
+        chore_ids: list[str],
+    ) -> list[str]:
+        """Atomically assign existing chores to one active child."""
+        async with self._lock:
+            child = self.data["children"].get(child_id)
+            if child is None:
+                raise UnknownChildError(child_id)
+            if not child["active"]:
+                raise InactiveChildError(child_id)
+
+            duplicate_chore_ids = sorted(
+                {chore_id for chore_id in chore_ids if chore_ids.count(chore_id) > 1}
+            )
+            if duplicate_chore_ids:
+                raise DuplicateChoreIdsError(duplicate_chore_ids)
+
+            unknown_chore_ids = [
+                chore_id
+                for chore_id in chore_ids
+                if chore_id not in self.data["chores"]
+            ]
+            if unknown_chore_ids:
+                raise UnknownChoresError(unknown_chore_ids)
+
+            inactive_chore_ids = [
+                chore_id
+                for chore_id in chore_ids
+                if not self.data["chores"][chore_id]["active"]
+            ]
+            if inactive_chore_ids:
+                raise InactiveChoresError(inactive_chore_ids)
+
+            existing_chore_ids = [
+                chore_id
+                for chore_id in chore_ids
+                if any(
+                    assignment["child_id"] == child_id
+                    and assignment["chore_id"] == chore_id
+                    for assignment in self.data["assignments"].values()
+                )
+            ]
+            if existing_chore_ids:
+                raise ExistingAssignmentsError(existing_chore_ids)
+
+            assignment_ids = [
+                self._create_assignment(child_id, chore_id) for chore_id in chore_ids
+            ]
+            await self.async_save()
+
+        return assignment_ids
 
     async def async_set_assignment_active(
         self,
