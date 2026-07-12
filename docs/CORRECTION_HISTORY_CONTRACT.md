@@ -52,13 +52,36 @@ Completion records are sorted by local date, then stable completion ID. The resp
 
 Call chores_manager/inventory separately for current children, chores, assignments, entity IDs, and presentation metadata. Consumers refresh both read commands after a correction; neither command subscribes to updates.
 
-## Planned mutation contract
+## Mutation transport
 
-The next milestone will add an admin-only, idempotent mutation for current-week correction:
+Use the admin-only Home Assistant WebSocket command:
+
+```json
+{
+  "type": "chores_manager/set_current_week_completion",
+  "assignment_id": "assignment_1",
+  "local_date": "2026-07-12",
+  "completed": true
+}
+```
+
+The command is idempotent. Its response reports the requested state, whether stored data changed, and the completion ID when the completed state exists.
+
+```json
+{
+  "assignment_id": "assignment_1",
+  "local_date": "2026-07-12",
+  "completed": true,
+  "completion_id": "completion_1",
+  "changed": true
+}
+```
+
+## Mutation rules
 
 - set an existing assignment's completed state for one valid local date;
 - add at most one completion per assignment and local date;
-- remove an existing completion by stable completion ID, including orphan completion history;
+- remove matching completion history by the stable assignment ID and local date, including orphan completion history;
 - permit correction of inactive but still-existing assignments;
 - reject new completions for deleted assignments, future dates, and dates before the current week start;
 - retain completion snapshots without rewriting their historical metadata.

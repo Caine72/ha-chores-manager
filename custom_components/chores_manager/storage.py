@@ -16,6 +16,7 @@ from .const import (
     WEEK_START_WEEKDAY,
 )
 from .exceptions import (
+    CorrectionDateOutsideCurrentWeekError,
     DuplicateAssignmentError,
     DuplicateChoreIdsError,
     ExistingAssignmentsError,
@@ -635,6 +636,65 @@ class ChoresManagerStore:
             await self.async_save()
 
         return completion_id
+
+    async def async_set_current_week_completion(
+        self,
+        assignment_id: str,
+        local_date: date,
+        completed: bool,
+    ) -> tuple[str | None, bool]:
+        """Set an assignment completion for a date in the current chore week."""
+        async with self._lock:
+            today = dt_util.now().date()
+            week_start, _ = self.get_current_week_bounds(today)
+            if not week_start <= local_date <= today:
+                raise CorrectionDateOutsideCurrentWeekError(local_date)
+
+            completion_ids = [
+                completion_id
+                for completion_id, completion in self.data["completions"].items()
+                if completion["assignment_id"] == assignment_id
+                and completion["local_date"] == local_date.isoformat()
+            ]
+
+            if not completed:
+                if not completion_ids:
+                    return None, False
+
+                for completion_id in completion_ids:
+                    del self.data["completions"][completion_id]
+
+                await self.async_save()
+                return None, True
+
+            if completion_ids:
+                return completion_ids[0], False
+
+            assignment = self.data["assignments"].get(assignment_id)
+            if assignment is None:
+                raise UnknownAssignmentError(assignment_id)
+
+            child = self.data["children"][assignment["child_id"]]
+            chore = self.data["chores"][assignment["chore_id"]]
+            completion_number = self.data["next_completion_id"]
+            completion_id = f"completion_{completion_number}"
+
+            self.data["completions"][completion_id] = {
+                "completed_at": dt_util.utcnow().isoformat(),
+                "local_date": local_date.isoformat(),
+                "child_id": assignment["child_id"],
+                "chore_id": assignment["chore_id"],
+                "assignment_id": assignment_id,
+                "child_name": child["name"],
+                "chore_title": chore["title"],
+                "category": chore["category"],
+                "points": chore["points"],
+            }
+            self.data["next_completion_id"] = completion_number + 1
+
+            await self.async_save()
+
+        return completion_id, True
 
     async def async_uncomplete_assignment(
         self,
