@@ -92,15 +92,42 @@ The read-only, admin-only `chores_manager/inventory` WebSocket command is implem
 
 It exposes all stored children, chores, and assignments, including inactive records, stable relationships, entity-registry IDs where available, and current chore-week bounds. It intentionally excludes completion history and has no subscription; consumers refresh after mutations.
 
-## Next milestone: native options-flow management for children and chores
+## Completed milestone: native options-flow management for children and chores
 
-v0.2 should make the integration manageable without manually calling Home Assistant actions for normal setup and maintenance. The first graphical-management step is a native options flow, not a separate frontend repository: these changes are occasional administration and Home Assistant already provides the needed forms, selectors, permissions, mobile support, and installation path.
+The Chores Manager config entry now exposes a native Configure flow for occasional administration without another frontend repository or installation path.
 
-This milestone introduces a Configure action for the Chores Manager config entry with a top-level Children and Chores menu. It supports create, edit, activate/deactivate, and confirmed delete operations, including active and inactive records.
+Completed behavior includes:
 
-The options flow is only an interface. Storage, stable IDs, lifecycle behavior, and validation remain backend-owned. It must reuse existing action/store mutation logic rather than creating a frontend-owned data model or a second set of business rules.
+- top-level Children and Chores management menus;
+- create, edit, activate/deactivate, and confirmed delete operations;
+- active and inactive record selection using current display metadata and stable IDs;
+- existing-or-new chore category selection;
+- a collapsed native advanced section for icon and sort order;
+- selected-record context above action menus;
+- precise submit verbs and one-level back navigation;
+- reuse of existing Home Assistant actions as the mutation path;
+- focused options-flow lifecycle and validation tests.
 
-Assignment administration is deliberately deferred to the following milestone. Its child-and-chore selection workflow needs a dedicated interaction design; the default all-child assignment behavior means it is expected to be used less often than chore maintenance.
+## Next milestone: native options-flow assignment management
+
+Complete native structural administration by adding Assignments to the Configure menu. The flow should add one child-to-chore relationship at a time, manage active and inactive assignments, and support activate/deactivate and confirmed delete operations through the existing assignment actions.
+
+Assignment creation should guide the user through active child selection and then show only active chores not already assigned to that child. Existing assignments should be labelled with current child and chore names but remain identified by stable assignment IDs. The selected assignment view must distinguish its own active flag from effective switch availability when a parent child or chore is inactive.
+
+There is no assignment edit operation: changing child or chore endpoints deletes one stable relationship and creates another. Batch mutation is deferred because the expected workflow is infrequent and partial-success behavior is not justified yet.
+
+The implementation must carry forward the native-flow UX decisions already validated for children and chores: exact action verbs, one-level navigation, static translated titles, dynamic selected-record descriptions, explicit delete consequences, and no frontend-owned business data.
+
+## Future overview requirement
+
+Drill-down flows are effective for changing one record but do not provide a good picture of the household's current state. After assignment administration, evaluate overview requirements alongside the existing card or cards rather than forcing a table into the options-flow UI.
+
+The analysis must distinguish:
+
+- structural overview: all chores, categories, points, active states, child relationships, and missing expected entities;
+- daily overview: current completion state for every child-to-chore relationship.
+
+A likely desktop presentation is a chore-by-child matrix or compact table. Mobile should use child-grouped or chore-grouped lists rather than compressing the matrix. The inventory WebSocket contract supplies structural data, while assignment entity states supply live completion state. Do not build this overview as part of assignment management.
 
 ## Integration-aware custom card
 

@@ -1,43 +1,61 @@
-# Next milestone: native options-flow management for children and chores
+# Next milestone: native options-flow assignment management
 
 ## Goal
 
-Make routine Chores Manager administration available from the integration's native Home Assistant options flow. This is the appropriate UI for occasional household setup and maintenance: it adds no second frontend repository, custom resource, or build and installation path.
+Complete routine structural administration by adding assignment management to the existing native Home Assistant options flow. This remains occasional administration, so it should reuse the integration repository and Home Assistant's built-in flow UI rather than introduce another frontend repository or installation path.
 
-The options flow is a user interface only. Integration storage and stable IDs remain authoritative. The flow must use the same backend mutation logic as the existing actions so lifecycle and validation behavior cannot diverge.
-
-The existing `chores_manager/inventory` WebSocket command remains the backend contract for future custom-card work. The options flow may share its inventory-building logic internally, but does not require a frontend WebSocket call.
+The options flow remains a user interface only. Integration storage and stable IDs are authoritative, and all mutations must use the existing assignment actions so validation, entity-registry cleanup, lifecycle behavior, and immutable completion history cannot diverge.
 
 ## Required options-flow work
 
-1. Add a Chores Manager options flow reachable from the config entry's Configure action.
-2. Provide a top-level menu for Children and Chores management.
-3. Show active and inactive records when selecting a child or chore to manage.
-4. Support add, edit, activate, deactivate, and delete operations for children.
-5. Support add, edit, activate, deactivate, and delete operations for chores.
-6. Require an explicit confirmation before deleting a child or chore, including clear notice that related assignments are removed while completion snapshots are retained.
-7. Return users to the relevant management menu after a successful mutation so they can perform another maintenance operation without manually calling an action.
-8. Use native form validation and translate existing domain errors into useful flow errors.
+1. Add Assignments to the top-level Chores Manager Configure menu.
+2. Provide Add assignment and Manage existing assignment paths, with one-level back navigation.
+3. Add one assignment at a time through a guided child-then-chore flow.
+4. Offer only active children when adding an assignment.
+5. After selecting a child, offer only active chores that do not already have an assignment to that child.
+6. Explain when no eligible child, chore, or pair is available instead of exposing an invalid form.
+7. Show active and inactive assignments when selecting an existing assignment to manage.
+8. Label assignment choices using current child and chore display names while preserving stable assignment identity.
+9. Show selected child, chore, assignment ID, assignment active state, effective switch availability, and any unavailable parent state above assignment actions.
+10. Support activate, deactivate, and confirmed delete operations.
+11. Do not provide Edit assignment: changing either relationship endpoint is delete-and-add and creates a new stable assignment identity.
+12. Return to the relevant assignment menu after successful mutations.
+
+## Carried-forward UX decisions
+
+- Use precise action labels such as Select child, Select chore, Add assignment, Activate assignment, Deactivate assignment, and Delete assignment.
+- Keep navigation one level at a time: assignment actions to Assignments, then Assignments to the main menu.
+- Use static translated flow titles and dynamic description placeholders for selected-record context.
+- Show destructive consequences before confirmation. Deleting an assignment removes its switch entity and registry entry but preserves completion snapshots until normal retention pruning.
+- Keep forms compact and use native selectors; do not add frontend-owned state.
 
 ## Backend and architecture requirements
 
-1. Reuse the existing action/store mutation path rather than duplicating business rules in the options flow.
-2. Preserve stable IDs, immutable completion snapshots, entity-registry behavior, and current activation semantics.
-3. Keep the config entry's options separate from integration-owned business storage.
-4. Do not make labels or entity names the primary management contract.
-5. Keep the inventory contract read-only and backward compatible.
+1. Reuse `add_assignment`, `set_assignment_active`, and `delete_assignment` as the mutation path.
+2. Preserve assignment stable IDs, monotonic ID counters, labels, entity identity, and independent activation semantics.
+3. Distinguish assignment `active` from effective switch availability: an active assignment is unavailable when its child or chore is inactive.
+4. Keep the inventory WebSocket contract read-only and backward compatible.
+5. Preserve storage version 1 unless implementation discovers a concrete migration requirement.
 
-## Deferred to the following milestone
+## Deferred overview analysis
 
-- Assignment administration, including add, activate/deactivate, and delete. It requires its own interaction design because the useful UI depends on selecting both a child and a chore and may later benefit from a matrix-style interface.
-- Inventory diagnostics for missing entities or inconsistent relationships.
-- A separate custom card or richer frontend.
+A drill-down options flow is appropriate for individual structural edits but is not an overview interface. A later milestone must evaluate structural and daily overview needs with the current card or cards:
+
+- structural overview of all chores, categories, points, active state, and child assignments;
+- daily overview of current completion state by child and chore;
+- desktop matrix or table presentation;
+- mobile child-grouped or chore-grouped presentation;
+- use of the inventory contract plus live assignment entity states;
+- optional diagnostics for missing expected entities or inconsistent relationships.
+
+Do not build that overview in this milestone. The options-flow UI cannot provide a strong responsive matrix, and the existing card analysis is the appropriate place to decide its final presentation.
 
 ## Constraints
 
-- Do not add rewards, allowance logic, notifications, import/export, historical completion editing, or broad analytics in this milestone.
+- Do not add batch assignment mutation in this milestone. Single-pair creation avoids partial-success behavior while usage remains infrequent.
+- Do not add rewards, allowance logic, notifications, import/export, historical completion editing, or broad analytics.
 - Do not expose mutable storage directly.
-- Preserve storage version 1 unless a concrete migration requirement is discovered.
+- Do not make labels or entity names the primary management contract.
 
 ## Validation
 
@@ -50,7 +68,7 @@ git diff --check
 git diff
 ```
 
-Run real HA acceptance when the local HA instance is available and the contract affects live behavior:
+Run real HA acceptance when the local HA instance is available:
 
 ```zsh
 ./scripts/run-real-ha-acceptance
@@ -58,8 +76,10 @@ Run real HA acceptance when the local HA instance is available and the contract 
 
 ## Done when
 
-- The existing config entry exposes a working Configure action for Chores Manager administrators.
-- Children and chores can be created and maintained, including inactive records, without manually calling an action.
-- Deletion confirmation accurately describes the lifecycle consequences.
+- Assignments are available from the native Chores Manager Configure menu.
+- An administrator can add a valid child-to-chore assignment without manually calling an action.
+- Existing active and inactive assignments can be inspected, activated, deactivated, and deleted.
+- Invalid and duplicate relationship choices are filtered or explained before mutation.
+- Deletion confirmation accurately describes entity removal and completion retention.
 - Existing actions and the options flow share lifecycle and validation behavior.
-- Validation passes without unresolved contract or compatibility risks.
+- Focused tests and full validation pass without unresolved compatibility risks.
