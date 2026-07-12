@@ -108,15 +108,21 @@ Completed behavior includes:
 - reuse of existing Home Assistant actions as the mutation path;
 - focused options-flow lifecycle and validation tests.
 
-## Next milestone: native options-flow assignment management
+## Completed milestone: native options-flow assignment management
 
-Complete native structural administration by adding Assignments to the Configure menu. The flow should add one child-to-chore relationship at a time, manage active and inactive assignments, and support activate/deactivate and confirmed delete operations through the existing assignment actions.
+The native Configure flow now supports guided single assignment creation and management of active and inactive assignments. It filters existing relationships, distinguishes assignment state from effective parent availability, and reuses existing actions for activation and confirmed deletion.
 
-Assignment creation should guide the user through active child selection and then show only active chores not already assigned to that child. Existing assignments should be labelled with current child and chore names but remain identified by stable assignment IDs. The selected assignment view must distinguish its own active flag from effective switch availability when a parent child or chore is inactive.
+## Next milestone: bulk assignment quality improvements
 
-There is no assignment edit operation: changing child or chore endpoints deletes one stable relationship and creates another. Batch mutation is deferred because the expected workflow is infrequent and partial-success behavior is not justified yet.
+Before v0.2 release preparation, improve setup efficiency without adding bulk creation of chore records.
 
-The implementation must carry forward the native-flow UX decisions already validated for children and chores: exact action verbs, one-level navigation, static translated titles, dynamic selected-record descriptions, explicit delete consequences, and no frontend-owned business data.
+The Add chore form should expose the existing `child_ids` capability as an active-children multi-select. All active children are selected by default, preserving current behavior, while the user may choose a smaller subset before creating the chore.
+
+For existing chores, replace single assignment creation with Assign chores to child: select one active child, select one or more eligible active chores, confirm the batch, and create every relationship atomically. A one-item selection preserves the existing workflow. Backend validation must reject the full batch before mutation if any relationship is unknown, inactive, duplicated, or already present.
+
+Do not add a separate one-chore-to-many-existing-children workflow or bulk chore-record creation in this milestone.
+
+After this quality milestone passes manual acceptance, proceed to v0.2 release completion: stale documentation cleanup, live acceptance coverage, version bump, release notes, tag, and GitHub release.
 
 ## Future overview requirement
 

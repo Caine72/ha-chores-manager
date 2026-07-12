@@ -1,61 +1,57 @@
-# Next milestone: native options-flow assignment management
+# Next milestone: bulk assignment quality improvements
 
 ## Goal
 
-Complete routine structural administration by adding assignment management to the existing native Home Assistant options flow. This remains occasional administration, so it should reuse the integration repository and Home Assistant's built-in flow UI rather than introduce another frontend repository or installation path.
+Improve native setup efficiency without adding bulk chore-record creation. The milestone covers assigning existing chores in bulk to one child and exposing the backend's existing child selection when creating one new chore.
 
-The options flow remains a user interface only. Integration storage and stable IDs are authoritative, and all mutations must use the existing assignment actions so validation, entity-registry cleanup, lifecycle behavior, and immutable completion history cannot diverge.
+The options flow remains a user interface over integration-owned storage and backend actions. Stable IDs, validation, entity creation, and completion history remain backend responsibilities.
 
-## Required options-flow work
+## Required create-chore improvement
 
-1. Add Assignments to the top-level Chores Manager Configure menu.
-2. Provide Add assignment and Manage existing assignment paths, with one-level back navigation.
-3. Add one assignment at a time through a guided child-then-chore flow.
-4. Offer only active children when adding an assignment.
-5. After selecting a child, offer only active chores that do not already have an assignment to that child.
-6. Explain when no eligible child, chore, or pair is available instead of exposing an invalid form.
-7. Show active and inactive assignments when selecting an existing assignment to manage.
-8. Label assignment choices using current child and chore display names while preserving stable assignment identity.
-9. Show selected child, chore, assignment ID, assignment active state, effective switch availability, and any unavailable parent state above assignment actions.
-10. Support activate, deactivate, and confirmed delete operations.
-11. Do not provide Edit assignment: changing either relationship endpoint is delete-and-add and creates a new stable assignment identity.
-12. Return to the relevant assignment menu after successful mutations.
+1. Show an active-children multi-select in the Add chore form.
+2. Default the selection to all active children, preserving today's behavior when the user makes no change.
+3. Allow the user to remove children from the selection before creating the chore.
+4. Require at least one active child.
+5. Pass the selected stable child IDs through the existing `add_chore` action's `child_ids` field.
+6. Keep title, category, points, icon, and sort-order behavior unchanged.
+7. Keep creation atomic through the existing store operation: the chore and all selected assignments are created together or not at all.
+
+## Required existing-chore bulk assignment
+
+1. Replace the single-chore add-assignment path with Assign chores to child.
+2. Select one active child.
+3. Show a multi-select containing active chores that do not already have any assignment to that child.
+4. Allow one or more chores to be selected; a one-item selection replaces the existing single-assignment workflow.
+5. Show the selected child, chore names, and assignment count in a confirmation step.
+6. Create all selected relationships atomically.
+7. Return to Assignments after success and refresh eligible choices.
+8. Explain when no active child, active chore, or eligible relationship remains.
+9. Keep Manage existing assignment unchanged.
+
+## Backend requirements
+
+1. Add an `assign_chores_to_child` action with `child_id` and non-empty `chore_ids`.
+2. Add one atomic store method that validates the complete batch before allocating IDs or changing data.
+3. Reject the entire batch for an unknown or inactive child, unknown or inactive chore, duplicate chore ID, or existing relationship.
+4. On rejection, preserve assignments, counters, registry state, and completion snapshots exactly.
+5. On success, allocate monotonic assignment IDs, save once, and let existing listeners create switch entities and labels.
+6. Preserve the existing `add_assignment` action for compatibility.
+7. Keep storage version 1 and the read-only inventory contract unchanged.
 
 ## Carried-forward UX decisions
 
-- Use precise action labels such as Select child, Select chore, Add assignment, Activate assignment, Deactivate assignment, and Delete assignment.
-- Keep navigation one level at a time: assignment actions to Assignments, then Assignments to the main menu.
-- Use static translated flow titles and dynamic description placeholders for selected-record context.
-- Show destructive consequences before confirmation. Deleting an assignment removes its switch entity and registry entry but preserves completion snapshots until normal retention pruning.
-- Keep forms compact and use native selectors; do not add frontend-owned state.
+- Use exact verbs: Select child, Select chores, Assign chores, and Add chore.
+- Keep one-level back navigation.
+- Use static translated titles and dynamic descriptions.
+- Filter invalid choices before submission while retaining authoritative backend validation.
+- Do not create frontend-owned business state.
 
-## Backend and architecture requirements
+## Explicitly out of scope
 
-1. Reuse `add_assignment`, `set_assignment_active`, and `delete_assignment` as the mutation path.
-2. Preserve assignment stable IDs, monotonic ID counters, labels, entity identity, and independent activation semantics.
-3. Distinguish assignment `active` from effective switch availability: an active assignment is unavailable when its child or chore is inactive.
-4. Keep the inventory WebSocket contract read-only and backward compatible.
-5. Preserve storage version 1 unless implementation discovers a concrete migration requirement.
-
-## Deferred overview analysis
-
-A drill-down options flow is appropriate for individual structural edits but is not an overview interface. A later milestone must evaluate structural and daily overview needs with the current card or cards:
-
-- structural overview of all chores, categories, points, active state, and child assignments;
-- daily overview of current completion state by child and chore;
-- desktop matrix or table presentation;
-- mobile child-grouped or chore-grouped presentation;
-- use of the inventory contract plus live assignment entity states;
-- optional diagnostics for missing expected entities or inconsistent relationships.
-
-Do not build that overview in this milestone. The options-flow UI cannot provide a strong responsive matrix, and the existing card analysis is the appropriate place to decide its final presentation.
-
-## Constraints
-
-- Do not add batch assignment mutation in this milestone. Single-pair creation avoids partial-success behavior while usage remains infrequent.
-- Do not add rewards, allowance logic, notifications, import/export, historical completion editing, or broad analytics.
-- Do not expose mutable storage directly.
-- Do not make labels or entity names the primary management contract.
+- Creating several new chore records in one operation.
+- Assigning one existing chore to several children as a separate workflow.
+- Editing assignment relationship endpoints.
+- Overview, matrix, diagnostics, rewards, notifications, import/export, or historical completion editing.
 
 ## Validation
 
@@ -68,18 +64,13 @@ git diff --check
 git diff
 ```
 
-Run real HA acceptance when the local HA instance is available:
-
-```zsh
-./scripts/run-real-ha-acceptance
-```
+Manual Home Assistant acceptance must cover the default-all child selection, a reduced child selection, multi-chore assignment, one-item assignment, duplicate filtering, and reload persistence.
 
 ## Done when
 
-- Assignments are available from the native Chores Manager Configure menu.
-- An administrator can add a valid child-to-chore assignment without manually calling an action.
-- Existing active and inactive assignments can be inspected, activated, deactivated, and deleted.
-- Invalid and duplicate relationship choices are filtered or explained before mutation.
-- Deletion confirmation accurately describes entity removal and completion retention.
-- Existing actions and the options flow share lifecycle and validation behavior.
-- Focused tests and full validation pass without unresolved compatibility risks.
+- A new chore can be assigned to an explicit subset of active children from Configure.
+- All active children remain selected by default.
+- One or more existing chores can be assigned atomically to one active child.
+- Rejected batches cause no partial mutation or stable-ID consumption.
+- Existing single-assignment callers remain compatible.
+- Focused tests and full validation pass.
