@@ -222,13 +222,21 @@
       "no_chore_updates": "Change at least one chore field.",
       "unknown_child": "That child no longer exists.",
       "unknown_chore": "That chore no longer exists.",
-      "unknown_error": "Chores Manager could not complete that change."
+      "unknown_error": "Chores Manager could not complete that change.",
+      "duplicate_assignment": "That child and chore already have an assignment.",
+      "inactive_child": "The selected child is inactive.",
+      "inactive_chore": "The selected chore is inactive.",
+      "no_active_assignment_children": "Add or activate a child before adding an assignment.",
+      "no_active_assignment_chores": "Add or activate a chore before adding an assignment.",
+      "no_available_assignment_pairs": "Every active child and chore combination already has an assignment.",
+      "unknown_assignment": "That assignment no longer exists."
     },
     "step": {
       "init": {
         "menu_options": {
           "children_menu": "Children",
-          "chores_menu": "Chores"
+          "chores_menu": "Chores",
+          "assignments_menu": "Assignments"
         },
         "title": "Manage Chores Manager"
       },
@@ -346,6 +354,62 @@
         "description": "Delete {title}? This also removes the chore's assignments and their entities. Completion history is kept.",
         "title": "Delete chore",
         "submit": "Delete chore"
+      },
+      "assignments_menu": {
+        "menu_options": {
+          "add_assignment_child": "Add assignment",
+          "select_assignment": "Manage an existing assignment",
+          "init": "\u2190 Back to main menu"
+        },
+        "title": "Assignments"
+      },
+      "add_assignment_child": {
+        "data": {
+          "child_id": "Child"
+        },
+        "description": "Only active children with an available active chore are shown.",
+        "title": "Choose child",
+        "submit": "Select child"
+      },
+      "add_assignment_chore": {
+        "data": {
+          "chore_id": "Chore"
+        },
+        "description": "Child: {name}\n\nOnly active chores not already assigned to this child are shown.",
+        "title": "Choose chore",
+        "submit": "Select chore"
+      },
+      "add_assignment_confirm": {
+        "description": "Assign {title} to {name}?",
+        "title": "Add assignment",
+        "submit": "Add assignment"
+      },
+      "assignment_unavailable": {
+        "title": "Cannot add assignment",
+        "submit": "Back to assignments"
+      },
+      "select_assignment": {
+        "data": {
+          "assignment_id": "Assignment"
+        },
+        "description": "Active and inactive assignments are shown.",
+        "title": "Choose assignment",
+        "submit": "Select assignment"
+      },
+      "assignment_actions": {
+        "menu_options": {
+          "activate_assignment": "Activate assignment",
+          "deactivate_assignment": "Deactivate assignment",
+          "delete_assignment": "Delete assignment",
+          "assignments_menu": "\u2190 Back to assignments"
+        },
+        "title": "Manage assignment",
+        "description": "Assignment: {name} - {title}\n\n{assignment_id} | {status}\n{availability}"
+      },
+      "delete_assignment": {
+        "description": "Delete the assignment of {title} to {name}? This removes its switch entity and registry entry. Completion history is kept.",
+        "title": "Delete assignment",
+        "submit": "Delete assignment"
       }
     }
   }
