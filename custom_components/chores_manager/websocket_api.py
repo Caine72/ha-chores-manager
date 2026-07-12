@@ -10,12 +10,14 @@ from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .models import ChoresManagerConfigEntry
 from .storage import ChoresManagerStore
 
 WS_TYPE_INVENTORY = f"{DOMAIN}/inventory"
+WS_TYPE_CURRENT_WEEK_COMPLETIONS = f"{DOMAIN}/current_week_completions"
 
 
 def _stable_id_sort_key(stable_id: str) -> tuple[str, int, str]:
@@ -32,6 +34,7 @@ def _stable_id_sort_key(stable_id: str) -> tuple[str, int, str]:
 def async_setup(hass: HomeAssistant) -> None:
     """Set up the Chores Manager WebSocket API."""
     websocket_api.async_register_command(hass, websocket_inventory)
+    websocket_api.async_register_command(hass, websocket_current_week_completions)
 
 
 def _get_loaded_entry(hass: HomeAssistant) -> ChoresManagerConfigEntry | None:
@@ -112,6 +115,38 @@ def _build_inventory(
     }
 
 
+def _build_current_week_completions(
+    store: ChoresManagerStore,
+) -> dict[str, Any]:
+    """Build the read-only current-week correction history response."""
+    week_start, _ = store.get_current_week_bounds()
+    today = dt_util.now().date()
+
+    return {
+        "window": {
+            "start": week_start.isoformat(),
+            "end": today.isoformat(),
+        },
+        "completions": [
+            {
+                "completion_id": completion_id,
+                "assignment_id": completion["assignment_id"],
+                "assignment_exists": completion["assignment_id"]
+                in store.data["assignments"],
+                "child_id": completion["child_id"],
+                "chore_id": completion["chore_id"],
+                "local_date": completion["local_date"],
+                "completed_at": completion["completed_at"],
+                "child_name": completion["child_name"],
+                "chore_title": completion["chore_title"],
+                "category": completion["category"],
+                "points": completion["points"],
+            }
+            for completion_id, completion in store.get_current_week_completions()
+        ],
+    }
+
+
 @callback
 @websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): WS_TYPE_INVENTORY})
@@ -132,3 +167,30 @@ def websocket_inventory(
         return
 
     connection.send_result(msg["id"], _build_inventory(hass, entry.runtime_data))
+
+
+@callback
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_TYPE_CURRENT_WEEK_COMPLETIONS}
+)
+def websocket_current_week_completions(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return correction history for the current chore week through today."""
+    entry = _get_loaded_entry(hass)
+
+    if entry is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Chores Manager is not loaded",
+        )
+        return
+
+    connection.send_result(
+        msg["id"],
+        _build_current_week_completions(entry.runtime_data),
+    )
