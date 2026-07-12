@@ -2,7 +2,7 @@
 
 ## Product direction
 
-Chores Manager is a private-use Home Assistant custom integration moving from the reliable backend v0.1 baseline toward a v0.2 inventory and graphical management release.
+Chores Manager is a private-use Home Assistant custom integration with a reliable v0.1 backend baseline and a v0.2 inventory and graphical management release.
 
 Development order:
 
@@ -112,7 +112,7 @@ Completed behavior includes:
 
 The native Configure flow now supports guided single assignment creation and management of active and inactive assignments. It filters existing relationships, distinguishes assignment state from effective parent availability, and reuses existing actions for activation and confirmed deletion.
 
-## Next milestone: bulk assignment quality improvements
+## Completed milestone: bulk assignment quality improvements
 
 Before v0.2 release preparation, improve setup efficiency without adding bulk creation of chore records.
 
@@ -122,7 +122,7 @@ For existing chores, replace single assignment creation with Assign chores to ch
 
 Do not add a separate one-chore-to-many-existing-children workflow or bulk chore-record creation in this milestone.
 
-After this quality milestone passes manual acceptance, proceed to v0.2 release completion: stale documentation cleanup, live acceptance coverage, version bump, release notes, tag, and GitHub release.
+The milestone passed automated and manual acceptance. Version v0.2 release completion covers stale documentation cleanup, live acceptance coverage, version bump, release notes, tag, and GitHub release.
 
 ## Future overview requirement
 

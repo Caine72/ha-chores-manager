@@ -430,7 +430,7 @@ def run_acceptance(
             "points": 3,
             "icon": "mdi:sprout",
             "sort_order": 20,
-            "child_ids": [alex_id, blake_id],
+            "child_ids": [alex_id],
         },
     )
 
@@ -445,25 +445,121 @@ def run_acceptance(
     plants_chore_id = chore_by_title[f"Feed plants {run_stamp}"]
     tracked_ids.update({"bed_chore": bed_chore_id, "plants_chore": plants_chore_id})
 
-    assignment_by_pair = {
+    blake_bed_switch = f"switch.{blake_id}_{bed_chore_id}"
+    blake_plants_switch = f"switch.{blake_id}_{plants_chore_id}"
+    call_service(
+        base_url=base_url,
+        token=token,
+        domain="chores_manager",
+        service="assign_chores_to_child",
+        data={
+            "child_id": blake_id,
+            "chore_ids": [bed_chore_id, plants_chore_id],
+        },
+    )
+    data = storage_data()
+    first_bulk_assignment_by_pair = {
         (assignment["child_id"], assignment["chore_id"]): assignment_id
         for assignment_id, assignment in data["assignments"].items()
     }
+    first_blake_bed_assignment = first_bulk_assignment_by_pair[
+        (blake_id, bed_chore_id)
+    ]
+    first_blake_plants_assignment = first_bulk_assignment_by_pair[
+        (blake_id, plants_chore_id)
+    ]
+    snapshots.append(
+        snapshot(
+            "bulk assign chores to child",
+            tracked_entity_ids + [blake_bed_switch, blake_plants_switch],
+            tracked_ids,
+        )
+    )
+
+    call_service(
+        base_url=base_url,
+        token=token,
+        domain="chores_manager",
+        service="remove_chores_from_child",
+        data={
+            "child_id": blake_id,
+            "chore_ids": [bed_chore_id, plants_chore_id],
+        },
+    )
+    wait_until(
+        "bulk assignment removal",
+        lambda: all(
+            assignment["child_id"] != blake_id
+            for assignment in storage_data()["assignments"].values()
+        )
+        and get_states(base_url=base_url, token=token).get(blake_bed_switch) is None
+        and get_states(base_url=base_url, token=token).get(blake_plants_switch) is None
+        and (
+            "chores_manager",
+            first_blake_bed_assignment,
+        )
+        not in entity_registry_by_unique()
+        and (
+            "chores_manager",
+            first_blake_plants_assignment,
+        )
+        not in entity_registry_by_unique(),
+    )
+    snapshots.append(
+        snapshot(
+            "bulk remove chores from child",
+            tracked_entity_ids + [blake_bed_switch, blake_plants_switch],
+            tracked_ids,
+        )
+    )
+
+    call_service(
+        base_url=base_url,
+        token=token,
+        domain="chores_manager",
+        service="assign_chores_to_child",
+        data={
+            "child_id": blake_id,
+            "chore_ids": [bed_chore_id, plants_chore_id],
+        },
+    )
+    assignment_by_pair = {
+        (assignment["child_id"], assignment["chore_id"]): assignment_id
+        for assignment_id, assignment in storage_data()["assignments"].items()
+    }
     alex_bed_assignment = assignment_by_pair[(alex_id, bed_chore_id)]
     alex_plants_assignment = assignment_by_pair[(alex_id, plants_chore_id)]
+    blake_bed_assignment = assignment_by_pair[(blake_id, bed_chore_id)]
     blake_plants_assignment = assignment_by_pair[(blake_id, plants_chore_id)]
+    assert_true(
+        int(blake_bed_assignment.split("_")[1])
+        > int(first_blake_bed_assignment.split("_")[1]),
+        "bulk reassign reused the removed bed assignment ID",
+    )
+    assert_true(
+        int(blake_plants_assignment.split("_")[1])
+        > int(first_blake_plants_assignment.split("_")[1]),
+        "bulk reassign reused the removed plants assignment ID",
+    )
     tracked_ids.update(
         {
             "alex_bed_assignment": alex_bed_assignment,
             "alex_plants_assignment": alex_plants_assignment,
+            "blake_bed_assignment": blake_bed_assignment,
             "blake_plants_assignment": blake_plants_assignment,
         }
     )
 
     alex_bed_switch = f"switch.{alex_id}_{bed_chore_id}"
     alex_plants_switch = f"switch.{alex_id}_{plants_chore_id}"
-    blake_plants_switch = f"switch.{blake_id}_{plants_chore_id}"
-    tracked_entity_ids.extend([alex_bed_switch, alex_plants_switch, blake_plants_switch])
+    tracked_entity_ids.extend(
+        [
+            alex_bed_switch,
+            alex_plants_switch,
+            blake_bed_switch,
+            blake_plants_switch,
+        ]
+    )
     snapshots.append(snapshot("add chores and assignments", tracked_entity_ids, tracked_ids))
 
     call_service(
@@ -667,6 +763,7 @@ def run_acceptance(
     assert_true(blake_plants_assignment not in data["assignments"], "deleted assignment remained in storage")
 
     assert_true(states.get(blake_sensor) is None, "deleted child sensor restored as state")
+    assert_true(states.get(blake_bed_switch) is None, "deleted child switch restored as state")
     assert_true(states.get(blake_plants_switch) is None, "deleted assignment switch restored as state")
     assert_true(states.get(alex_plants_switch) is None, "deleted chore switch restored as state")
 
@@ -695,6 +792,11 @@ def run_acceptance(
             "criterion": "Deactivate/reactivate preserves structure and history",
             "result": "PASS",
             "evidence": "Activation toggles changed live availability without deleting structure or completion history.",
+        },
+        {
+            "criterion": "Bulk assignment and removal are atomic",
+            "result": "PASS",
+            "evidence": "Two Blake relationships were added, removed from storage/state/registry, and recreated with newer stable IDs.",
         },
         {
             "criterion": "Delete removes targeted live structure/entities only",

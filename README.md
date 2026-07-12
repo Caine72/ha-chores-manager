@@ -9,7 +9,7 @@ Chores Manager is a Home Assistant custom integration I use for tracking househo
 >
 > It is also vibe coded with AI assistance. The code is intended to be practical, understandable, and reliable for my household workflow rather than polished as a broadly maintained open-source project.
 
-The backend has a private `0.1.0` baseline and is moving toward `0.2.0` inventory-aware graphical management. It intentionally focuses on integration-owned storage, entities, actions, and the backend inventory contract; the custom card remains a separate milestone.
+Version `0.2.0` adds inventory-aware graphical management while retaining integration-owned storage, entities, actions, and stable IDs. The custom card remains a separate post-release milestone.
 
 ## What it does
 
@@ -77,7 +77,7 @@ Entity IDs and unique IDs are derived from stable integration IDs, not display n
 
 ## Native Management
 
-For occasional household administration, open **Settings -> Devices & services -> Chores Manager -> Configure**. The native options flow can create, edit, activate, deactivate, and delete children and chores. It can also add, activate, deactivate, and delete child-to-chore assignments. It shows active and inactive records and asks for confirmation before a delete; deleting structure removes related live entities while retaining completion history.
+For occasional household administration, open **Settings -> Devices & services -> Chores Manager -> Configure**. The native options flow can create, edit, activate, deactivate, and delete children and chores. It can assign or remove multiple chores for one child, and manage individual active or inactive assignments. It shows active and inactive records and asks for confirmation before removal or deletion; deleting structure removes related live entities while retaining completion history.
 
 ## Actions
 
@@ -92,6 +92,8 @@ Actions are available under the `chores_manager` domain.
 | `update_chore` | `chore_id` | `title`, `category`, `points`, `icon`, `sort_order` | Updates editable chore metadata for future state and completions. At least one editable field is required. |
 | `set_chore_active` | `chore_id`, `active` | none | Deactivates or reactivates a chore while preserving stored structure and history. |
 | `add_assignment` | `child_id`, `chore_id` | none | Assigns an active child to an active chore. Duplicate assignments are rejected. |
+| `assign_chores_to_child` | `child_id`, `chore_ids` | none | Atomically assigns one or more active chores to one active child. |
+| `remove_chores_from_child` | `child_id`, `chore_ids` | none | Atomically removes one or more assignments and their switch registry entries while preserving completion history. |
 | `set_assignment_active` | `assignment_id`, `active` | none | Deactivates or reactivates one assignment while preserving stored structure and history. |
 | `delete_assignment` | `assignment_id` | none | Deletes one assignment and its switch registry entry while preserving completion snapshots. |
 | `delete_child` | `child_id` | none | Deletes a child, the weekly-points sensor registry entry, and that child's assignment switch registry entries while preserving completion snapshots. |
@@ -117,7 +119,7 @@ Stable ID counters are monotonic. Deleted IDs are not reused.
 
 ## Storage Compatibility
 
-The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Backend `0.1.0` preserves storage version `1`; no migration is required for this release.
+The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Version `0.2.0` preserves storage version `1`; upgrading from `0.1.0` requires no storage migration.
 
 Storage and stable IDs are the source of truth. Labels are initialized for assignment switches as a secondary Home Assistant organization boundary and are not the primary integration contract.
 
@@ -131,7 +133,6 @@ See `docs/INVENTORY_CONTRACT.md` for the full response contract.
 
 - This is a private-use backend release, not a broad public support commitment.
 - Only one config entry is supported.
-- There is no graphical management UI or custom card in this repository yet.
 - The custom card is not included in this repository.
 - Historical completion snapshots cannot be edited or hard-deleted through integration actions.
 - Rewards, allowance logic, notifications, import/export, and diagnostics are outside the current backend scope.
