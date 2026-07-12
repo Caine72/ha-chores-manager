@@ -18,6 +18,7 @@ CHORE_SWITCH = "switch.kid_1_chore_1"
 POINTS_SENSOR = "sensor.kid_1_weekly_points"
 WS_TYPE_INVENTORY = "chores_manager/inventory"
 WS_TYPE_CURRENT_WEEK_COMPLETIONS = "chores_manager/current_week_completions"
+WS_TYPE_SET_CURRENT_WEEK_COMPLETION = "chores_manager/set_current_week_completion"
 
 
 async def _call_action(
@@ -52,6 +53,19 @@ async def _get_current_week_completions(
     """Fetch current-week correction history over WebSocket."""
     client = await hass_ws_client(hass)
     await client.send_json_auto_id({"type": WS_TYPE_CURRENT_WEEK_COMPLETIONS})
+    return await client.receive_json()
+
+
+async def _set_current_week_completion(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    data: dict[str, object],
+) -> dict[str, Any]:
+    """Correct a current-week completion over WebSocket."""
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {"type": WS_TYPE_SET_CURRENT_WEEK_COMPLETION, **data}
+    )
     return await client.receive_json()
 
 
@@ -260,6 +274,298 @@ async def test_current_week_completions_returns_current_window_and_orphans(
             }
         ],
     }
+
+
+async def test_set_current_week_completion_is_idempotent_and_updates_points(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test admin corrections create and remove one current-week completion."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+    )
+
+    local_date = dt_util.now().date().isoformat()
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": True,
+        },
+    )
+
+    assert response["success"]
+    assert response["result"] == {
+        "assignment_id": "assignment_1",
+        "local_date": local_date,
+        "completed": True,
+        "completion_id": "completion_1",
+        "changed": True,
+    }
+    points_state = hass.states.get(POINTS_SENSOR)
+    switch_state = hass.states.get(CHORE_SWITCH)
+    assert points_state is not None
+    assert switch_state is not None
+    assert points_state.state == "2"
+    assert switch_state.state == "on"
+
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": True,
+        },
+    )
+    assert response["success"]
+    assert response["result"]["completion_id"] == "completion_1"
+    assert response["result"]["changed"] is False
+
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": False,
+        },
+    )
+    assert response["success"]
+    assert response["result"] == {
+        "assignment_id": "assignment_1",
+        "local_date": local_date,
+        "completed": False,
+        "completion_id": None,
+        "changed": True,
+    }
+    points_state = hass.states.get(POINTS_SENSOR)
+    switch_state = hass.states.get(CHORE_SWITCH)
+    assert points_state is not None
+    assert switch_state is not None
+    assert points_state.state == "0"
+    assert switch_state.state == "off"
+
+
+async def test_set_current_week_completion_allows_inactive_assignment_and_orphan_removal(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test correction permits inactive additions and orphan-history removal."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+    )
+    await _call_action(
+        hass,
+        "set_assignment_active",
+        {"assignment_id": "assignment_1", "active": False},
+    )
+
+    local_date = dt_util.now().date().isoformat()
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": True,
+        },
+    )
+    assert response["success"]
+    assert (
+        loaded_config_entry.runtime_data.data["completions"]["completion_1"]["points"]
+        == 2
+    )
+
+    await _call_action(
+        hass,
+        "delete_assignment",
+        {"assignment_id": "assignment_1"},
+    )
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": True,
+        },
+    )
+    assert response["success"]
+    assert response["result"]["changed"] is False
+
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": False,
+        },
+    )
+    assert response["success"]
+    assert response["result"]["changed"] is True
+    assert loaded_config_entry.runtime_data.data["completions"] == {}
+
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": True,
+        },
+    )
+    assert not response["success"]
+    assert response["error"] == {
+        "code": "not_found",
+        "message": "Assignment assignment_1 does not exist",
+    }
+
+
+async def test_set_current_week_completion_rejects_future_date(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test correction rejects future dates."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+    )
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": (dt_util.now().date() + timedelta(days=1)).isoformat(),
+            "completed": True,
+        },
+    )
+
+    assert not response["success"]
+    assert response["error"] == {
+        "code": "invalid_format",
+        "message": "local_date must be within the current chore week through today",
+    }
+    assert loaded_config_entry.runtime_data.data["completions"] == {}
+
+
+async def test_set_current_week_completion_rejects_previous_week_date(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test correction rejects retained previous-week dates."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+    )
+
+    week_start, _ = loaded_config_entry.runtime_data.get_current_week_bounds()
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": (week_start - timedelta(days=1)).isoformat(),
+            "completed": True,
+        },
+    )
+
+    assert not response["success"]
+    assert response["error"] == {
+        "code": "invalid_format",
+        "message": "local_date must be within the current chore week through today",
+    }
+    assert loaded_config_entry.runtime_data.data["completions"] == {}
+
+
+async def test_set_current_week_completion_rejects_invalid_date(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test correction rejects invalid local-date syntax."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+    )
+
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": "not-a-date",
+            "completed": True,
+        },
+    )
+
+    assert not response["success"]
+    assert response["error"] == {
+        "code": "invalid_format",
+        "message": "local_date must use YYYY-MM-DD format",
+    }
+    assert loaded_config_entry.runtime_data.data["completions"] == {}
+
+
+@pytest.mark.usefixtures("loaded_config_entry")
+async def test_set_current_week_completion_requires_admin(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_access_token: str,
+) -> None:
+    """Test correction mutation rejects non-admin users."""
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json_auto_id(
+        {
+            "type": WS_TYPE_SET_CURRENT_WEEK_COMPLETION,
+            "assignment_id": "assignment_1",
+            "local_date": dt_util.now().date().isoformat(),
+            "completed": True,
+        }
+    )
+    response = await client.receive_json()
+
+    assert not response["success"]
+    assert response["error"]["code"] == "unauthorized"
 
 
 async def test_inventory_requires_loaded_entry(

@@ -1,5 +1,7 @@
 """Exceptions for Chores Manager."""
 
+from datetime import date
+
 
 class ChoresManagerError(Exception):
     """Base exception for Chores Manager."""
@@ -32,6 +34,15 @@ class UnknownAssignmentError(ChoresManagerError):
         """Initialize the exception."""
         self.assignment_id = assignment_id
         super().__init__(assignment_id)
+
+
+class CorrectionDateOutsideCurrentWeekError(ChoresManagerError):
+    """Raised when a correction date is outside the current chore week."""
+
+    def __init__(self, local_date: date) -> None:
+        """Initialize the exception."""
+        self.local_date = local_date
+        super().__init__(local_date.isoformat())
 
 
 class UnknownChildrenError(ChoresManagerError):

@@ -1,5 +1,6 @@
 """WebSocket API for Chores Manager."""
 
+from datetime import date
 from typing import Any, cast
 
 import voluptuous as vol
@@ -12,12 +13,14 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import ATTR_ASSIGNMENT_ID, DOMAIN
+from .exceptions import CorrectionDateOutsideCurrentWeekError, UnknownAssignmentError
 from .models import ChoresManagerConfigEntry
 from .storage import ChoresManagerStore
 
 WS_TYPE_INVENTORY = f"{DOMAIN}/inventory"
 WS_TYPE_CURRENT_WEEK_COMPLETIONS = f"{DOMAIN}/current_week_completions"
+WS_TYPE_SET_CURRENT_WEEK_COMPLETION = f"{DOMAIN}/set_current_week_completion"
 
 
 def _stable_id_sort_key(stable_id: str) -> tuple[str, int, str]:
@@ -35,6 +38,7 @@ def async_setup(hass: HomeAssistant) -> None:
     """Set up the Chores Manager WebSocket API."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_current_week_completions)
+    websocket_api.async_register_command(hass, websocket_set_current_week_completion)
 
 
 def _get_loaded_entry(hass: HomeAssistant) -> ChoresManagerConfigEntry | None:
@@ -193,4 +197,76 @@ def websocket_current_week_completions(
     connection.send_result(
         msg["id"],
         _build_current_week_completions(entry.runtime_data),
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TYPE_SET_CURRENT_WEEK_COMPLETION,
+        vol.Required(ATTR_ASSIGNMENT_ID): vol.All(str, str.strip, vol.Length(min=1)),
+        vol.Required("local_date"): vol.All(str, str.strip, vol.Length(min=1)),
+        vol.Required("completed"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_set_current_week_completion(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Correct an assignment completion within the current chore week."""
+    entry = _get_loaded_entry(hass)
+
+    if entry is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Chores Manager is not loaded",
+        )
+        return
+
+    try:
+        local_date = date.fromisoformat(msg["local_date"])
+    except ValueError:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_INVALID_FORMAT,
+            "local_date must use YYYY-MM-DD format",
+        )
+        return
+
+    try:
+        (
+            completion_id,
+            changed,
+        ) = await entry.runtime_data.async_set_current_week_completion(
+            msg[ATTR_ASSIGNMENT_ID],
+            local_date,
+            msg["completed"],
+        )
+    except CorrectionDateOutsideCurrentWeekError:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_INVALID_FORMAT,
+            "local_date must be within the current chore week through today",
+        )
+        return
+    except UnknownAssignmentError as err:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            f"Assignment {err.assignment_id} does not exist",
+        )
+        return
+
+    connection.send_result(
+        msg["id"],
+        {
+            "assignment_id": msg[ATTR_ASSIGNMENT_ID],
+            "local_date": local_date.isoformat(),
+            "completed": msg["completed"],
+            "completion_id": completion_id,
+            "changed": changed,
+        },
     )
