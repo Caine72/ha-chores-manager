@@ -139,9 +139,13 @@ A likely desktop presentation is a chore-by-child matrix or compact table. Mobil
 
 The separate admin card needs supported access to completion history for correcting the current chore week. The integration must expose an admin-only read model for completion snapshots from the current Saturday-Friday week through today, while keeping the retained previous week read-only. It must use stable IDs and include orphan history whose assignment was later deleted. This contract is separate from structural inventory and introduces no card code or mutation in its first milestone.
 
-## Current milestone: current-week completion correction
+## Completed milestone: current-week completion correction
 
 The admin card needs one backend-owned, idempotent mutation that sets an assignment's completion state for a selected date within the current chore week. It must snapshot current metadata only when adding a new completion, remove orphan history by assignment ID and date, permit inactive existing assignments, and refresh live entities and weekly points after every change. Future and retained previous-week dates are rejected by the backend.
+
+## Completed milestone: admin correction acceptance readiness
+
+The real Home Assistant acceptance runner includes the admin WebSocket correction history and mutation checks. Once Home Assistant loads the candidate integration, it proves current-week completion creation and removal update the matching live switch and weekly-points sensor, and records the result with the existing lifecycle evidence. The backend is ready for the manual integration contract test documented in `docs/ADMIN_CORRECTION_MANUAL_TEST.md`.
 
 ## Integration-aware custom card
 

@@ -1,32 +1,33 @@
-# Current milestone: current-week completion correction
+# Next milestone: card and overview analysis
 
 ## Goal
 
-Add the backend-owned, admin-only mutation required by the correction card. It must make an assignment completed or incomplete for a selected current-week date without relying on a card helper, a To-do list, counters, or an automation script.
+Analyze the current Home Assistant card or cards and define the next user-facing interaction milestone. The integration backend is now ready for an out-of-repository admin correction card, but the card itself is not part of this repository.
 
 ## Inputs
 
-1. The current card source and configuration, treated as read-only reference.
-2. The v0.2 inventory WebSocket contract.
-3. The merged current-week completion history contract.
+1. `docs/INVENTORY_CONTRACT.md` for stable structural inventory.
+2. `docs/CORRECTION_HISTORY_CONTRACT.md` for current-week admin correction.
+3. `docs/ADMIN_CORRECTION_MANUAL_TEST.md` for the integration release-candidate test.
+4. The existing card source and configuration, treated only as reference.
+5. Desktop and mobile daily workflows.
 
 ## Required analysis
 
-1. Define one idempotent admin-only WebSocket correction command.
-2. Add a snapshot for an existing assignment and a valid current-week date.
-3. Remove a matching completion by assignment ID and local date, including orphan history.
-4. Allow inactive but existing assignments to receive a correction.
-5. Reject future dates, previous-week dates, invalid dates, and new completions for deleted assignments.
-6. Refresh entity listeners so today's switch and weekly points reflect corrections immediately.
-7. Add focused mutation, access-control, idempotence, orphan-history, and date-boundary tests.
+1. Replace entity-name matching, labels, helper entities, counters, To-do lists, and automation scripts with integration-owned stable IDs and WebSocket contracts.
+2. Separate daily completion interaction, structural overview, and admin correction views.
+3. Define a desktop chore-by-child overview and a mobile grouped alternative.
+4. Define card loading, error, empty, inactive, orphan-history, and access-denied states.
+5. Decide whether the current card should be refactored, replaced, or split.
+6. Define repository ownership, installation, and release boundaries.
 
 ## Constraints
 
-- Integration storage and stable IDs remain the source of truth.
-- The current week is the only mutable correction window; the retained previous week remains read-only.
-- No card implementation, resource, helper entity, To-do list, counter, or script is included in this repository.
-- The card remains separate and receives no source files from this repository.
+- The card stores no long-term business data.
+- Structural data comes from inventory; current-week correction history comes from the correction contract; live current-day interaction uses assignment switches.
+- The current Saturday-Friday week through today is the only correctable interval.
+- No card source, resource, helper entity, To-do list, counter, or automation script belongs in this repository.
 
 ## Deliverable
 
-An implemented and documented current-week correction mutation, ready for final integration acceptance preparation.
+Document a concrete card milestone with view structure, data flow, repository decision, acceptance criteria, migration plan, and deferred functionality.

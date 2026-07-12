@@ -129,12 +129,21 @@ Chores Manager exposes an admin-only Home Assistant WebSocket command, `chores_m
 
 See `docs/INVENTORY_CONTRACT.md` for the full response contract.
 
+## Admin Correction API
+
+For a separate admin card that corrects the current week's history, Chores Manager exposes two admin-only WebSocket commands:
+
+- `chores_manager/current_week_completions` returns completion snapshots from the current Saturday-Friday week through today;
+- `chores_manager/set_current_week_completion` idempotently sets one assignment's completion state for a valid date in that window.
+
+The correction API supports inactive existing assignments and removal of history after an assignment is deleted. It rejects future dates, retained previous-week dates, and new completions for deleted assignments. See `docs/CORRECTION_HISTORY_CONTRACT.md` for the full contract.
+
 ## Known Limitations
 
 - This is a private-use backend release, not a broad public support commitment.
 - Only one config entry is supported.
 - The custom card is not included in this repository.
-- Historical completion snapshots cannot be edited or hard-deleted through integration actions.
+- Historical completion correction is limited to the current chore week and requires an admin WebSocket client.
 - Rewards, allowance logic, notifications, import/export, and diagnostics are outside the current backend scope.
 
 ## Development Validation
