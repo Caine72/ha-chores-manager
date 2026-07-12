@@ -12,6 +12,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     ATTR_ACTIVE,
+    ATTR_ASSIGNMENT_ID,
     ATTR_CATEGORY,
     ATTR_CHILD_ID,
     ATTR_CHORE_ID,
@@ -23,10 +24,13 @@ from .const import (
     DEFAULT_CHORE_ICON,
     DOMAIN,
     NAME,
+    SERVICE_ADD_ASSIGNMENT,
     SERVICE_ADD_CHILD,
     SERVICE_ADD_CHORE,
+    SERVICE_DELETE_ASSIGNMENT,
     SERVICE_DELETE_CHILD,
     SERVICE_DELETE_CHORE,
+    SERVICE_SET_ASSIGNMENT_ACTIVE,
     SERVICE_SET_CHILD_ACTIVE,
     SERVICE_SET_CHORE_ACTIVE,
     SERVICE_UPDATE_CHILD,
@@ -77,8 +81,12 @@ def _stable_id_sort_key(stable_id: str) -> tuple[str, int, str]:
 class ChoresManagerOptionsFlow(OptionsFlow):
     """Manage Chores Manager data through Home Assistant's options UI."""
 
+    _pending_assignment_child_id: str | None = None
+    _pending_assignment_chore_id: str | None = None
+    _selected_assignment_id: str | None = None
     _selected_child_id: str | None = None
     _selected_chore_id: str | None = None
+    _unavailable_assignment_error: str = "no_available_assignment_pairs"
 
     @property
     def _store(self):
@@ -152,6 +160,84 @@ class ChoresManagerOptionsFlow(OptionsFlow):
             )
         ]
 
+    def _eligible_assignment_chores(
+        self,
+        child_id: str,
+    ) -> list[selector.SelectOptionDict]:
+        """Return active chores not already assigned to the selected child."""
+        assigned_chore_ids = {
+            assignment["chore_id"]
+            for assignment in self._store.data["assignments"].values()
+            if assignment["child_id"] == child_id
+        }
+        return [
+            selector.SelectOptionDict(
+                value=chore_id,
+                label=(
+                    f"{chore['title']} "
+                    f"({chore['category']}, {chore['points']} points, {chore_id})"
+                ),
+            )
+            for chore_id, chore in sorted(
+                self._store.data["chores"].items(),
+                key=lambda item: _stable_id_sort_key(item[0]),
+            )
+            if chore["active"] and chore_id not in assigned_chore_ids
+        ]
+
+    def _eligible_assignment_children(self) -> list[selector.SelectOptionDict]:
+        """Return active children with at least one available active chore."""
+        return [
+            selector.SelectOptionDict(
+                value=child_id,
+                label=f"{child['name']} ({child_id})",
+            )
+            for child_id, child in sorted(
+                self._store.data["children"].items(),
+                key=lambda item: _stable_id_sort_key(item[0]),
+            )
+            if child["active"] and self._eligible_assignment_chores(child_id)
+        ]
+
+    def _assignment_options(self) -> list[selector.SelectOptionDict]:
+        """Return assignment choices with relationship names and active state."""
+        children = self._store.data["children"]
+        chores = self._store.data["chores"]
+        return [
+            selector.SelectOptionDict(
+                value=assignment_id,
+                label=(
+                    f"{children[assignment['child_id']]['name']} - "
+                    f"{chores[assignment['chore_id']]['title']} ({assignment_id})"
+                    if assignment["active"]
+                    else (
+                        f"{children[assignment['child_id']]['name']} - "
+                        f"{chores[assignment['chore_id']]['title']} "
+                        f"({assignment_id}, inactive)"
+                    )
+                ),
+            )
+            for assignment_id, assignment in sorted(
+                self._store.data["assignments"].items(),
+                key=lambda item: _stable_id_sort_key(item[0]),
+            )
+        ]
+
+    def _selected_assignment(self) -> dict[str, Any] | None:
+        """Return the selected assignment, if it still exists."""
+        if self._selected_assignment_id is None:
+            return None
+
+        return self._store.data["assignments"].get(self._selected_assignment_id)
+
+    def _assignment_unavailable_reason(self) -> str:
+        """Return why no new assignment relationship can be created."""
+        if not any(child["active"] for child in self._store.data["children"].values()):
+            return "no_active_assignment_children"
+        if not any(chore["active"] for chore in self._store.data["chores"].values()):
+            return "no_active_assignment_chores"
+        return "no_available_assignment_pairs"
+
     def _selected_child(self) -> dict[str, Any] | None:
         """Return the selected child, if it still exists."""
         if self._selected_child_id is None:
@@ -172,7 +258,7 @@ class ChoresManagerOptionsFlow(OptionsFlow):
         """Show the management menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["children_menu", "chores_menu"],
+            menu_options=["children_menu", "chores_menu", "assignments_menu"],
         )
 
     async def async_step_children_menu(
@@ -536,6 +622,264 @@ class ChoresManagerOptionsFlow(OptionsFlow):
             step_id="delete_chore",
             data_schema=vol.Schema({}),
             description_placeholders={"title": chore["title"]},
+            errors=errors,
+        )
+
+    async def async_step_assignments_menu(
+        self,
+        _: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Show assignment management choices."""
+        menu_options = ["add_assignment_child"]
+        if self._assignment_options():
+            menu_options.append("select_assignment")
+        menu_options.append("init")
+
+        return self.async_show_menu(
+            step_id="assignments_menu",
+            menu_options=menu_options,
+        )
+
+    async def async_step_add_assignment_child(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Select an active child for a new assignment."""
+        options = self._eligible_assignment_children()
+        if not options:
+            self._unavailable_assignment_error = self._assignment_unavailable_reason()
+            return await self.async_step_assignment_unavailable()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            child_id = user_input[ATTR_CHILD_ID]
+            if any(option["value"] == child_id for option in options):
+                self._pending_assignment_child_id = child_id
+                return await self.async_step_add_assignment_chore()
+            errors["base"] = "unknown_child"
+
+        return self.async_show_form(
+            step_id="add_assignment_child",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(ATTR_CHILD_ID): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=options)
+                    )
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_add_assignment_chore(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Select an available active chore for a new assignment."""
+        child_id = self._pending_assignment_child_id
+        child = self._store.data["children"].get(child_id) if child_id else None
+        if child is None or not child["active"]:
+            return await self.async_step_add_assignment_child()
+
+        options = self._eligible_assignment_chores(child_id)
+        if not options:
+            self._unavailable_assignment_error = "no_available_assignment_pairs"
+            return await self.async_step_assignment_unavailable()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            chore_id = user_input[ATTR_CHORE_ID]
+            if any(option["value"] == chore_id for option in options):
+                self._pending_assignment_chore_id = chore_id
+                return await self.async_step_add_assignment_confirm()
+            errors["base"] = "unknown_chore"
+
+        return self.async_show_form(
+            step_id="add_assignment_chore",
+            data_schema=self._chore_selector_schema(options),
+            description_placeholders={
+                "name": child["name"],
+            },
+            errors=errors,
+        )
+
+    async def async_step_add_assignment_confirm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Confirm creation of the selected assignment relationship."""
+        child_id = self._pending_assignment_child_id
+        chore_id = self._pending_assignment_chore_id
+        child = self._store.data["children"].get(child_id) if child_id else None
+        chore = self._store.data["chores"].get(chore_id) if chore_id else None
+        if child is None or chore is None:
+            return await self.async_step_assignments_menu()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            error = await self._async_call_action(
+                SERVICE_ADD_ASSIGNMENT,
+                {ATTR_CHILD_ID: child_id, ATTR_CHORE_ID: chore_id},
+            )
+            if error is None:
+                self._pending_assignment_child_id = None
+                self._pending_assignment_chore_id = None
+                return await self.async_step_assignments_menu()
+            errors["base"] = error
+
+        return self.async_show_form(
+            step_id="add_assignment_confirm",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "name": child["name"],
+                "title": chore["title"],
+            },
+            errors=errors,
+        )
+
+    async def async_step_assignment_unavailable(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Explain why no new assignment can be created."""
+        if user_input is not None:
+            return await self.async_step_assignments_menu()
+
+        return self.async_show_form(
+            step_id="assignment_unavailable",
+            data_schema=vol.Schema({}),
+            errors={"base": self._unavailable_assignment_error},
+        )
+
+    async def async_step_select_assignment(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Select an assignment to manage."""
+        options = self._assignment_options()
+        if not options:
+            return await self.async_step_assignments_menu()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            assignment_id = user_input[ATTR_ASSIGNMENT_ID]
+            if assignment_id in self._store.data["assignments"]:
+                self._selected_assignment_id = assignment_id
+                return await self.async_step_assignment_actions()
+            errors["base"] = "unknown_assignment"
+
+        return self.async_show_form(
+            step_id="select_assignment",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(ATTR_ASSIGNMENT_ID): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=options)
+                    )
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_assignment_actions(
+        self,
+        _: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Show actions and effective availability for the selected assignment."""
+        assignment = self._selected_assignment()
+        if assignment is None:
+            return await self.async_step_assignments_menu()
+
+        child = self._store.data["children"][assignment["child_id"]]
+        chore = self._store.data["chores"][assignment["chore_id"]]
+        unavailable_reasons = []
+        if not assignment["active"]:
+            unavailable_reasons.append("assignment inactive")
+        if not child["active"]:
+            unavailable_reasons.append("child inactive")
+        if not chore["active"]:
+            unavailable_reasons.append("chore inactive")
+        availability = (
+            "Switch available"
+            if not unavailable_reasons
+            else f"Switch unavailable: {', '.join(unavailable_reasons)}"
+        )
+
+        return self.async_show_menu(
+            step_id="assignment_actions",
+            menu_options=[
+                (
+                    "deactivate_assignment"
+                    if assignment["active"]
+                    else "activate_assignment"
+                ),
+                "delete_assignment",
+                "assignments_menu",
+            ],
+            description_placeholders={
+                "name": child["name"],
+                "title": chore["title"],
+                "assignment_id": self._selected_assignment_id or "",
+                "status": "Active" if assignment["active"] else "Inactive",
+                "availability": availability,
+            },
+        )
+
+    async def async_step_activate_assignment(
+        self,
+        _: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Activate the selected assignment."""
+        if self._selected_assignment() is None:
+            return await self.async_step_assignments_menu()
+
+        await self._async_call_action(
+            SERVICE_SET_ASSIGNMENT_ACTIVE,
+            {ATTR_ASSIGNMENT_ID: self._selected_assignment_id, ATTR_ACTIVE: True},
+        )
+        return await self.async_step_assignment_actions()
+
+    async def async_step_deactivate_assignment(
+        self,
+        _: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Deactivate the selected assignment."""
+        if self._selected_assignment() is None:
+            return await self.async_step_assignments_menu()
+
+        await self._async_call_action(
+            SERVICE_SET_ASSIGNMENT_ACTIVE,
+            {ATTR_ASSIGNMENT_ID: self._selected_assignment_id, ATTR_ACTIVE: False},
+        )
+        return await self.async_step_assignment_actions()
+
+    async def async_step_delete_assignment(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Confirm deletion of the selected assignment."""
+        assignment = self._selected_assignment()
+        if assignment is None:
+            return await self.async_step_assignments_menu()
+
+        child = self._store.data["children"][assignment["child_id"]]
+        chore = self._store.data["chores"][assignment["chore_id"]]
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            error = await self._async_call_action(
+                SERVICE_DELETE_ASSIGNMENT,
+                {ATTR_ASSIGNMENT_ID: self._selected_assignment_id},
+            )
+            if error is None:
+                self._selected_assignment_id = None
+                return await self.async_step_assignments_menu()
+            errors["base"] = error
+
+        return self.async_show_form(
+            step_id="delete_assignment",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "name": child["name"],
+                "title": chore["title"],
+            },
             errors=errors,
         )
 

@@ -3,6 +3,7 @@
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import entity_registry as er
 
 from .common import DOMAIN
 
@@ -226,3 +227,228 @@ async def test_options_flow_add_chore_requires_active_child(
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "add_chore"
     assert result["errors"] == {"base": "no_active_children"}
+
+
+async def test_options_flow_manages_assignment_lifecycle(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test guided assignment creation and lifecycle management."""
+    await hass.services.async_call(
+        DOMAIN,
+        "add_child",
+        {"name": "Alex"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_child",
+        {"name": "Isabelle"},
+        blocking=True,
+    )
+
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "assignments_menu")
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "assignments_menu"
+
+    result = await _select_menu_option(hass, result["flow_id"], "init")
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "init"
+
+    result = await _select_menu_option(hass, result["flow_id"], "assignments_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "add_assignment_child")
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "add_assignment_child"
+    child_key = next(
+        key for key in result["data_schema"].schema if key.schema == "child_id"
+    )
+    child_selector = result["data_schema"].schema[child_key]
+    assert child_selector.config["options"] == [
+        {"value": "kid_2", "label": "Isabelle (kid_2)"}
+    ]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"child_id": "kid_2"},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "add_assignment_chore"
+    assert result["description_placeholders"] == {"name": "Isabelle"}
+    chore_key = next(
+        key for key in result["data_schema"].schema if key.schema == "chore_id"
+    )
+    chore_selector = result["data_schema"].schema[chore_key]
+    assert chore_selector.config["options"] == [
+        {
+            "value": "chore_1",
+            "label": "Make the bed (Morning, 2 points, chore_1)",
+        }
+    ]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"chore_id": "chore_1"},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "add_assignment_confirm"
+    assert result["description_placeholders"] == {
+        "name": "Isabelle",
+        "title": "Make the bed",
+    }
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "assignments_menu"
+    assert loaded_config_entry.runtime_data.data["assignments"]["assignment_2"] == {
+        "child_id": "kid_2",
+        "chore_id": "chore_1",
+        "active": True,
+    }
+
+    entity_registry = er.async_get(hass)
+    assert (
+        entity_registry.async_get_entity_id(
+            "switch",
+            DOMAIN,
+            "assignment_2",
+        )
+        == "switch.kid_2_chore_1"
+    )
+
+    result = await _select_menu_option(hass, result["flow_id"], "select_assignment")
+    assert result["type"] is FlowResultType.FORM
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"assignment_id": "assignment_2"},
+    )
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "assignment_actions"
+    assert result["description_placeholders"] == {
+        "name": "Isabelle",
+        "title": "Make the bed",
+        "assignment_id": "assignment_2",
+        "status": "Active",
+        "availability": "Switch available",
+    }
+    assert result["menu_options"] == [
+        "deactivate_assignment",
+        "delete_assignment",
+        "assignments_menu",
+    ]
+
+    result = await _select_menu_option(
+        hass,
+        result["flow_id"],
+        "deactivate_assignment",
+    )
+    assert result["type"] is FlowResultType.MENU
+    assert result["description_placeholders"]["status"] == "Inactive"
+    assert (
+        result["description_placeholders"]["availability"]
+        == "Switch unavailable: assignment inactive"
+    )
+
+    result = await _select_menu_option(hass, result["flow_id"], "activate_assignment")
+    assert result["type"] is FlowResultType.MENU
+    assert result["description_placeholders"]["status"] == "Active"
+
+    result = await _select_menu_option(hass, result["flow_id"], "delete_assignment")
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "delete_assignment"
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "assignments_menu"
+    assert "assignment_2" not in loaded_config_entry.runtime_data.data["assignments"]
+    assert entity_registry.async_get_entity_id("switch", DOMAIN, "assignment_2") is None
+
+
+async def test_options_flow_explains_when_no_assignment_pair_is_available(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test duplicate assignment pairs are filtered and explained."""
+    await hass.services.async_call(
+        DOMAIN,
+        "add_child",
+        {"name": "Alex"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+        blocking=True,
+    )
+
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "assignments_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "add_assignment_child")
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "assignment_unavailable"
+    assert result["errors"] == {"base": "no_available_assignment_pairs"}
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "assignments_menu"
+
+
+async def test_options_flow_shows_assignment_parent_availability(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test assignment context distinguishes parent and assignment state."""
+    await hass.services.async_call(
+        DOMAIN,
+        "add_child",
+        {"name": "Alex"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "set_child_active",
+        {"child_id": "kid_1", "active": False},
+        blocking=True,
+    )
+
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "assignments_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "select_assignment")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"assignment_id": "assignment_1"},
+    )
+
+    assert result["type"] is FlowResultType.MENU
+    assert result["description_placeholders"]["status"] == "Active"
+    assert (
+        result["description_placeholders"]["availability"]
+        == "Switch unavailable: child inactive"
+    )
