@@ -7,7 +7,6 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import UNIT_POINTS
 from .models import ChoresManagerConfigEntry
 from .storage import ChoresManagerStore
 
@@ -62,7 +61,6 @@ class ChildWeeklyPointsSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:star-circle"
-    _attr_native_unit_of_measurement = UNIT_POINTS
     _attr_should_poll = False
 
     def __init__(

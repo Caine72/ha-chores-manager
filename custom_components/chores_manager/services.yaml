@@ -1,3 +1,53 @@
+increment_weekly_counter:
+  fields:
+    child_id:
+      required: true
+      example: kid_1
+      selector:
+        text:
+
+    amount:
+      required: false
+      default: 1
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          mode: box
+
+    reason:
+      required: false
+      example: Manual reward adjustment
+      selector:
+        text:
+
+decrement_weekly_counter:
+  fields:
+    child_id:
+      required: true
+      example: kid_1
+      selector:
+        text:
+
+    amount:
+      required: false
+      default: 1
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          mode: box
+
+    reason:
+      required: false
+      example: Manual correction
+      selector:
+        text:
+
 add_child:
   fields:
     name:

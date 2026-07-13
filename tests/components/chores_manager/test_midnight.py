@@ -108,6 +108,16 @@ def _completion(local_date: str) -> dict[str, str | int]:
     }
 
 
+def _adjustment(local_date: str, points: int) -> dict[str, str | int]:
+    """Create a stored weekly points adjustment."""
+    return {
+        "adjusted_at": f"{local_date}T08:00:00+00:00",
+        "local_date": local_date,
+        "child_id": "kid_1",
+        "points": points,
+    }
+
+
 async def test_regular_midnight_refreshes_daily_state_without_resetting_points(
     hass: HomeAssistant,
     config_entry: MockConfigEntry,
@@ -222,3 +232,92 @@ async def test_loading_store_prunes_completions_outside_retention(
         assert reloaded_store.data["next_completion_id"] == 4
         assert _state(hass, CHORE_SWITCH).state == "on"
         assert _state(hass, WEEKLY_POINTS_SENSOR).state == "2"
+
+
+async def test_saturday_rollover_excludes_previous_week_adjustments(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+) -> None:
+    """Test Friday-to-Saturday rollover resets adjustment points."""
+    with freeze_time("2026-07-10 23:59:00+00:00"):
+        await _setup_entry(hass, config_entry)
+        await _call_action(hass, "add_child", {"name": "Alex"})
+        await _call_action(
+            hass,
+            "increment_weekly_counter",
+            {"child_id": "kid_1", "amount": 3},
+        )
+
+        assert _state(hass, WEEKLY_POINTS_SENSOR).state == "3"
+
+    with freeze_time("2026-07-11 00:00:00+00:00"):
+        await _fire_registered_midnight(hass)
+
+        points_state = _state(hass, WEEKLY_POINTS_SENSOR)
+        assert points_state.state == "0"
+        assert points_state.attributes["week_start"] == "2026-07-11"
+        assert points_state.attributes["week_end"] == "2026-07-17"
+
+
+async def test_saturday_pruning_keeps_current_and_previous_adjustment_weeks(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+) -> None:
+    """Test Saturday pruning retains adjustment history for two chore weeks."""
+    with freeze_time("2026-07-17 23:59:00+00:00"):
+        await _setup_entry(hass, config_entry)
+        await _call_action(hass, "add_child", {"name": "Alex"})
+
+        store = config_entry.runtime_data
+        store.data["adjustments"] = {
+            "adjustment_1": _adjustment("2026-07-10", 1),
+            "adjustment_2": _adjustment("2026-07-11", 2),
+            "adjustment_3": _adjustment("2026-07-17", 3),
+            "adjustment_4": _adjustment("2026-07-18", 4),
+        }
+        store.data["next_adjustment_id"] = 5
+        await store.async_save()
+        await hass.async_block_till_done()
+
+    with freeze_time("2026-07-18 00:00:00+00:00"):
+        await _fire_registered_midnight(hass)
+
+        assert list(store.data["adjustments"]) == [
+            "adjustment_2",
+            "adjustment_3",
+            "adjustment_4",
+        ]
+        assert store.data["next_adjustment_id"] == 5
+        assert _state(hass, WEEKLY_POINTS_SENSOR).state == "4"
+
+
+async def test_loading_store_prunes_adjustments_outside_retention(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test setup also applies the two-week adjustment retention policy."""
+    with freeze_time("2026-07-18 08:00:00+00:00"):
+        await _call_action(hass, "add_child", {"name": "Alex"})
+
+        store = loaded_config_entry.runtime_data
+        store.data["adjustments"] = {
+            "adjustment_1": _adjustment("2026-07-10", 1),
+            "adjustment_2": _adjustment("2026-07-11", 2),
+            "adjustment_3": _adjustment("2026-07-18", 3),
+        }
+        store.data["next_adjustment_id"] = 4
+        await store.async_save()
+        await hass.async_block_till_done()
+
+        assert await hass.config_entries.async_unload(loaded_config_entry.entry_id)
+        await hass.async_block_till_done()
+        assert await hass.config_entries.async_setup(loaded_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        reloaded_store = loaded_config_entry.runtime_data
+        assert list(reloaded_store.data["adjustments"]) == [
+            "adjustment_2",
+            "adjustment_3",
+        ]
+        assert reloaded_store.data["next_adjustment_id"] == 4
+        assert _state(hass, WEEKLY_POINTS_SENSOR).state == "3"

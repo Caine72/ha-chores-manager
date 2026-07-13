@@ -2,9 +2,13 @@
 
 from datetime import datetime
 
+import pytest
+import voluptuous as vol
+
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, State
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 
 from .common import DOMAIN
@@ -65,6 +69,140 @@ async def _create_assignment(hass: HomeAssistant) -> None:
             "icon": "mdi:bed",
         },
     )
+
+
+@pytest.mark.usefixtures("loaded_config_entry")
+async def test_weekly_points_sensor_is_unitless(
+    hass: HomeAssistant,
+) -> None:
+    """Test weekly points sensor exposes a number without a native unit."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+
+    points_state = _state(hass, WEEKLY_POINTS_SENSOR)
+
+    assert points_state.state == "0"
+    assert "unit_of_measurement" not in points_state.attributes
+
+
+async def test_increment_weekly_counter_adds_adjustment(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test incrementing the weekly counter stores an adjustment."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+
+    await _call_action(
+        hass,
+        "increment_weekly_counter",
+        {"child_id": "kid_1", "amount": 3, "reason": "Bonus"},
+    )
+
+    store = loaded_config_entry.runtime_data
+    adjustment = store.data["adjustments"]["adjustment_1"]
+    assert _state(hass, WEEKLY_POINTS_SENSOR).state == "3"
+    assert store.data["next_adjustment_id"] == 2
+    assert adjustment == {
+        "adjusted_at": adjustment["adjusted_at"],
+        "local_date": dt_util.now().date().isoformat(),
+        "child_id": "kid_1",
+        "points": 3,
+        "reason": "Bonus",
+    }
+    assert datetime.fromisoformat(adjustment["adjusted_at"]).tzinfo is not None
+
+
+async def test_decrement_weekly_counter_clamps_at_zero(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test decrementing never makes the weekly counter negative."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "increment_weekly_counter",
+        {"child_id": "kid_1", "amount": 3},
+    )
+
+    await _call_action(
+        hass,
+        "decrement_weekly_counter",
+        {"child_id": "kid_1", "amount": 5},
+    )
+
+    store = loaded_config_entry.runtime_data
+    assert _state(hass, WEEKLY_POINTS_SENSOR).state == "0"
+    assert [
+        adjustment["points"] for adjustment in store.data["adjustments"].values()
+    ] == [3, -3]
+
+
+async def test_decrement_weekly_counter_at_zero_is_noop(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test decrementing an empty weekly counter does not store an adjustment."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+
+    await _call_action(
+        hass,
+        "decrement_weekly_counter",
+        {"child_id": "kid_1"},
+    )
+
+    assert _state(hass, WEEKLY_POINTS_SENSOR).state == "0"
+    assert loaded_config_entry.runtime_data.data["adjustments"] == {}
+    assert loaded_config_entry.runtime_data.data["next_adjustment_id"] == 1
+
+
+@pytest.mark.usefixtures("loaded_config_entry")
+async def test_weekly_points_combine_completions_and_adjustments(
+    hass: HomeAssistant,
+) -> None:
+    """Test chore completions and manual adjustments share the weekly total."""
+    await _create_assignment(hass)
+    await _call_switch_action(hass, "turn_on")
+
+    await _call_action(
+        hass,
+        "increment_weekly_counter",
+        {"child_id": "kid_1", "amount": 3},
+    )
+    await _call_action(
+        hass,
+        "decrement_weekly_counter",
+        {"child_id": "kid_1", "amount": 1},
+    )
+
+    assert _state(hass, WEEKLY_POINTS_SENSOR).state == "4"
+
+
+async def test_adjust_weekly_counter_rejects_unknown_child(
+    hass: HomeAssistant,
+) -> None:
+    """Test weekly counter adjustments require an existing child."""
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "increment_weekly_counter",
+            {"child_id": "kid_99"},
+            blocking=True,
+        )
+
+
+@pytest.mark.usefixtures("loaded_config_entry")
+async def test_adjust_weekly_counter_rejects_invalid_amount(
+    hass: HomeAssistant,
+) -> None:
+    """Test weekly counter adjustment amount must be positive."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN,
+            "increment_weekly_counter",
+            {"child_id": "kid_1", "amount": 0},
+            blocking=True,
+        )
 
 
 async def test_complete_assignment_updates_state_points_and_snapshot(
