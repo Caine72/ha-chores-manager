@@ -2,7 +2,7 @@
 
 ## Product direction
 
-Chores Manager is a private-use Home Assistant custom integration with a reliable v0.1 backend baseline and a v0.2 inventory and graphical management release.
+Chores Manager is a private-use Home Assistant custom integration with a reliable v0.1 backend baseline, a v0.2 inventory and graphical management release, and a v0.3 backend contract for current-week admin correction.
 
 Development order:
 
@@ -12,8 +12,10 @@ Development order:
 4. Prepare and release backend v0.1.
 5. Define the backend inventory contract needed by graphical management and the custom card.
 6. Add a graphical management interface for children, chores, and assignments so routine changes do not require manually calling actions.
-7. After v0.2, analyze the current custom card or cards and refactor them to use this repository's backend contract.
-8. Only then consider broader administration, generalization, or distribution.
+7. Add backend APIs for current-week admin correction.
+8. Complete backend v0.3 release acceptance.
+9. Start card implementation in a separate repository using this repository's documented contracts.
+10. Only then consider broader administration, generalization, or distribution.
 
 The source code and automated tests are authoritative if this document becomes stale.
 
@@ -32,6 +34,8 @@ The source code and automated tests are authoritative if this document becomes s
 - Explicit child, chore, and assignment delete actions with completion-snapshot preservation
 - Child and chore metadata editing
 - One-time default `Chores` label initialization that preserves user labels
+- Admin-only structural inventory WebSocket API
+- Admin-only current-week completion history and correction WebSocket APIs
 - Focused automated test coverage for implemented behavior
 - Release hardening coverage for the registered midnight callback, legacy storage compatibility, and singleton config-flow behavior
 
@@ -143,15 +147,22 @@ The separate admin card needs supported access to completion history for correct
 
 The admin card needs one backend-owned, idempotent mutation that sets an assignment's completion state for a selected date within the current chore week. It must snapshot current metadata only when adding a new completion, remove orphan history by assignment ID and date, permit inactive existing assignments, and refresh live entities and weekly points after every change. Future and retained previous-week dates are rejected by the backend.
 
-## Completed milestone: admin correction acceptance readiness
+## Completed milestone: backend v0.3 release preparation
 
-The real Home Assistant acceptance runner includes the admin WebSocket correction history and mutation checks. Once Home Assistant loads the candidate integration, it proves current-week completion creation and removal update the matching live switch and weekly-points sensor, and records the result with the existing lifecycle evidence. The backend is ready for the manual integration contract test documented in `docs/ADMIN_CORRECTION_MANUAL_TEST.md`.
+The `0.3.0` backend release contains the admin WebSocket correction history and mutation contracts needed by the future card. The real Home Assistant acceptance runner proves current-week completion creation and removal update the matching live switch and weekly-points sensor, and records the result with the existing lifecycle evidence.
+
+Release-candidate validation completed on 2026-07-13:
+
+- `./scripts/validate`
+- `./scripts/run-real-ha-acceptance`
+
+The generated acceptance JSON and HTML reports are local artifacts and are not committed.
 
 ## Integration-aware custom card
 
-The custom card will not be built in this repository. Add a link to the separate card repository here once that repository is available.
+The custom card will not be built in this repository. Card and overview analysis is outside this backend release and card implementation starts in a separate repository. Add a link to that repository here once it is available.
 
-The card still shapes important backend requirements. Before card work starts elsewhere, this repository must define the inventory contract and keep the following principles visible. After v0.2 is complete, analyze the current card or cards used for interacting with the integration, then refactor the separate card to consume this repository's interface instead of relying on labels, entity-name matching, or frontend-owned business data.
+The card still shapes important backend requirements. The separate card should consume this repository's inventory and correction contracts instead of relying on labels, entity-name matching, or frontend-owned business data. Any backend gaps discovered during card implementation should become explicit future backend milestones.
 
 Card principles:
 

@@ -9,7 +9,7 @@ Chores Manager is a Home Assistant custom integration I use for tracking househo
 >
 > It is also vibe coded with AI assistance. The code is intended to be practical, understandable, and reliable for my household workflow rather than polished as a broadly maintained open-source project.
 
-Version `0.2.0` adds inventory-aware graphical management while retaining integration-owned storage, entities, actions, and stable IDs. The custom card remains a separate post-release milestone.
+Version `0.3.0` finalizes the backend contract needed by the separate card work. It retains the inventory-aware management from `0.2.0` and adds admin-only current-week correction history and completion correction APIs. The custom card remains a separate repository milestone.
 
 ## What it does
 
@@ -32,6 +32,7 @@ Current backend development scope is intentionally narrow:
 - Home Assistant actions for automation and scripted management;
 - no custom card in this repository;
 - read-only inventory API for graphical management and custom-card work;
+- admin-only current-week correction APIs for a separate correction card;
 - no rewards, allowance logic, notifications, import/export, or diagnostics.
 
 The integration is named generally because the workflow may grow, but the current implementation is still shaped around one private household setup.
@@ -119,7 +120,7 @@ Stable ID counters are monotonic. Deleted IDs are not reused.
 
 ## Storage Compatibility
 
-The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Version `0.2.0` preserves storage version `1`; upgrading from `0.1.0` requires no storage migration.
+The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Version `0.3.0` preserves storage version `1`; upgrading from `0.1.0` or `0.2.0` requires no storage migration.
 
 Storage and stable IDs are the source of truth. Labels are initialized for assignment switches as a secondary Home Assistant organization boundary and are not the primary integration contract.
 
@@ -161,3 +162,5 @@ For live Home Assistant acceptance, configure the local untracked `.real_ha_acce
 ```sh
 ./scripts/run-real-ha-acceptance
 ```
+
+The `0.3.0` release candidate passed `./scripts/validate` and real Home Assistant acceptance on 2026-07-13. The generated acceptance artifacts are local files and are not committed.
