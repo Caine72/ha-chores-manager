@@ -8,6 +8,42 @@
     }
   },
   "services": {
+    "increment_weekly_counter": {
+      "name": "Increment weekly counter",
+      "description": "Adds points to a child's current weekly counter.",
+      "fields": {
+        "child_id": {
+          "name": "Child ID",
+          "description": "The stable ID of the child whose weekly counter should be incremented."
+        },
+        "amount": {
+          "name": "Amount",
+          "description": "The number of points to add. Defaults to 1."
+        },
+        "reason": {
+          "name": "Reason",
+          "description": "Optional note describing why the adjustment was made."
+        }
+      }
+    },
+    "decrement_weekly_counter": {
+      "name": "Decrement weekly counter",
+      "description": "Subtracts points from a child's current weekly counter without going below zero.",
+      "fields": {
+        "child_id": {
+          "name": "Child ID",
+          "description": "The stable ID of the child whose weekly counter should be decremented."
+        },
+        "amount": {
+          "name": "Amount",
+          "description": "The number of points to subtract. Defaults to 1."
+        },
+        "reason": {
+          "name": "Reason",
+          "description": "Optional note describing why the adjustment was made."
+        }
+      }
+    },
     "add_child": {
       "name": "Add child",
       "description": "Adds a child to Chores Manager.",

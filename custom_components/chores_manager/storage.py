@@ -80,6 +80,16 @@ class CompletionData(TypedDict):
     points: int
 
 
+class AdjustmentData(TypedDict):
+    """Stored weekly point adjustment."""
+
+    adjusted_at: str
+    local_date: str
+    child_id: str
+    points: int
+    reason: NotRequired[str]
+
+
 class ChoresManagerData(TypedDict):
     """Stored Chores Manager data."""
 
@@ -87,11 +97,13 @@ class ChoresManagerData(TypedDict):
     next_chore_id: int
     next_assignment_id: int
     next_completion_id: int
+    next_adjustment_id: int
 
     children: dict[str, ChildData]
     chores: dict[str, ChoreData]
     assignments: dict[str, AssignmentData]
     completions: dict[str, CompletionData]
+    adjustments: dict[str, AdjustmentData]
     label_initialized_assignment_ids: NotRequired[list[str]]
 
 
@@ -102,10 +114,12 @@ def create_empty_data() -> ChoresManagerData:
         "next_chore_id": 1,
         "next_assignment_id": 1,
         "next_completion_id": 1,
+        "next_adjustment_id": 1,
         "children": {},
         "chores": {},
         "assignments": {},
         "completions": {},
+        "adjustments": {},
         "label_initialized_assignment_ids": [],
     }
 
@@ -139,7 +153,18 @@ class ChoresManagerStore:
             self.data["label_initialized_assignment_ids"] = []
             data_changed = True
 
+        if "next_adjustment_id" not in self.data:
+            self.data["next_adjustment_id"] = 1
+            data_changed = True
+
+        if "adjustments" not in self.data:
+            self.data["adjustments"] = {}
+            data_changed = True
+
         if self._prune_old_completions(dt_util.now().date()):
+            data_changed = True
+
+        if self._prune_old_adjustments(dt_util.now().date()):
             data_changed = True
 
         if data_changed:
@@ -154,7 +179,9 @@ class ChoresManagerStore:
         """Refresh date-bound state and prune at the chore-week boundary."""
         if now.date().weekday() == WEEK_START_WEEKDAY:
             async with self._lock:
-                if self._prune_old_completions(now.date()):
+                completions_pruned = self._prune_old_completions(now.date())
+                adjustments_pruned = self._prune_old_adjustments(now.date())
+                if completions_pruned or adjustments_pruned:
                     await self.async_save()
                     return
 
@@ -597,6 +624,42 @@ class ChoresManagerStore:
 
         return True
 
+    async def async_adjust_weekly_counter(
+        self,
+        child_id: str,
+        amount: int,
+        reason: str | None = None,
+    ) -> str | None:
+        """Adjust a child's current weekly counter and return the adjustment ID."""
+        async with self._lock:
+            if child_id not in self.data["children"]:
+                raise UnknownChildError(child_id)
+
+            adjustment_points = amount
+            if amount < 0:
+                current_points = self.get_current_week_points(child_id)
+                adjustment_points = -min(abs(amount), current_points)
+                if adjustment_points == 0:
+                    return None
+
+            adjustment_number = self.data["next_adjustment_id"]
+            adjustment_id = f"adjustment_{adjustment_number}"
+            adjustment: AdjustmentData = {
+                "adjusted_at": dt_util.utcnow().isoformat(),
+                "local_date": dt_util.now().date().isoformat(),
+                "child_id": child_id,
+                "points": adjustment_points,
+            }
+            if reason:
+                adjustment["reason"] = reason
+
+            self.data["adjustments"][adjustment_id] = adjustment
+            self.data["next_adjustment_id"] = adjustment_number + 1
+
+            await self.async_save()
+
+        return adjustment_id
+
     async def async_complete_assignment(self, assignment_id: str) -> str:
         """Complete an assignment for today."""
         async with self._lock:
@@ -774,12 +837,20 @@ class ChoresManagerStore:
         """Return the points earned by a child this chore week."""
         week_start, week_end = self.get_current_week_bounds()
 
-        return sum(
+        completion_points = sum(
             completion["points"]
             for completion in self.data["completions"].values()
             if completion["child_id"] == child_id
             and week_start <= date.fromisoformat(completion["local_date"]) <= week_end
         )
+        adjustment_points = sum(
+            adjustment["points"]
+            for adjustment in self.data["adjustments"].values()
+            if adjustment["child_id"] == child_id
+            and week_start <= date.fromisoformat(adjustment["local_date"]) <= week_end
+        )
+
+        return completion_points + adjustment_points
 
     def get_current_week_completions(self) -> list[tuple[str, CompletionData]]:
         """Return retained completion snapshots correctable during the current week."""
@@ -812,6 +883,21 @@ class ChoresManagerStore:
             del self.data["completions"][completion_id]
 
         return bool(completion_ids_to_remove)
+
+    def _prune_old_adjustments(self, reference_date: date) -> bool:
+        """Remove adjustments older than the retained two chore weeks."""
+        current_week_start, _ = self.get_current_week_bounds(reference_date)
+        retention_start = current_week_start - timedelta(days=7)
+        adjustment_ids_to_remove = [
+            adjustment_id
+            for adjustment_id, adjustment in self.data["adjustments"].items()
+            if date.fromisoformat(adjustment["local_date"]) < retention_start
+        ]
+
+        for adjustment_id in adjustment_ids_to_remove:
+            del self.data["adjustments"][adjustment_id]
+
+        return bool(adjustment_ids_to_remove)
 
     def _create_assignment(
         self,

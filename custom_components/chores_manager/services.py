@@ -15,6 +15,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     ATTR_ACTIVE,
+    ATTR_AMOUNT,
     ATTR_ASSIGNMENT_ID,
     ATTR_CATEGORY,
     ATTR_CHILD_ID,
@@ -24,6 +25,7 @@ from .const import (
     ATTR_ICON,
     ATTR_NAME,
     ATTR_POINTS,
+    ATTR_REASON,
     ATTR_SORT_ORDER,
     ATTR_TITLE,
     DEFAULT_CHORE_ICON,
@@ -32,9 +34,11 @@ from .const import (
     SERVICE_ADD_CHILD,
     SERVICE_ADD_CHORE,
     SERVICE_ASSIGN_CHORES_TO_CHILD,
+    SERVICE_DECREMENT_WEEKLY_COUNTER,
     SERVICE_DELETE_ASSIGNMENT,
     SERVICE_DELETE_CHILD,
     SERVICE_DELETE_CHORE,
+    SERVICE_INCREMENT_WEEKLY_COUNTER,
     SERVICE_REMOVE_CHORES_FROM_CHILD,
     SERVICE_SET_ASSIGNMENT_ACTIVE,
     SERVICE_SET_CHILD_ACTIVE,
@@ -60,6 +64,25 @@ from .exceptions import (
     UnknownChoresError,
 )
 from .models import ChoresManagerConfigEntry
+
+ADJUST_WEEKLY_COUNTER_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CHILD_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+        vol.Optional(ATTR_AMOUNT, default=1): vol.All(
+            vol.Coerce(int),
+            vol.Range(min=1, max=100),
+        ),
+        vol.Optional(ATTR_REASON): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1, max=200),
+        ),
+    }
+)
 
 ADD_ASSIGNMENT_SCHEMA = vol.Schema(
     {
@@ -288,6 +311,30 @@ def _async_remove_assignment_registry_entries(
     """Remove assignment switch registry entries by assignment IDs."""
     for assignment_id in assignment_ids:
         _async_remove_registry_entry(hass, SWITCH_DOMAIN, assignment_id)
+
+
+async def _async_handle_adjust_weekly_counter(
+    hass: HomeAssistant,
+    call: ServiceCall,
+    multiplier: int,
+) -> None:
+    """Handle a weekly-counter adjustment action."""
+    entry = _get_loaded_entry(hass)
+
+    try:
+        await entry.runtime_data.async_adjust_weekly_counter(
+            call.data[ATTR_CHILD_ID],
+            call.data[ATTR_AMOUNT] * multiplier,
+            call.data.get(ATTR_REASON),
+        )
+    except UnknownChildError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_child",
+            translation_placeholders={
+                "child_id": err.child_id,
+            },
+        ) from err
 
 
 async def _async_handle_delete_assignment(
@@ -645,6 +692,20 @@ async def async_setup_services(
                     "chore_id": err.chore_id,
                 },
             ) from err
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_INCREMENT_WEEKLY_COUNTER,
+        partial(_async_handle_adjust_weekly_counter, hass, multiplier=1),
+        schema=ADJUST_WEEKLY_COUNTER_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DECREMENT_WEEKLY_COUNTER,
+        partial(_async_handle_adjust_weekly_counter, hass, multiplier=-1),
+        schema=ADJUST_WEEKLY_COUNTER_SCHEMA,
+    )
 
     hass.services.async_register(
         DOMAIN,
