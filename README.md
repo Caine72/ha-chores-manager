@@ -4,6 +4,8 @@
 
 Chores Manager is a Home Assistant custom integration I use for tracking household chores, daily completions, and weekly points.
 
+Standalone Lovelace cards created for it [Chores Manager Cards](https://github.com/Caine72/ha-chores-manager-cards)
+
 > [!IMPORTANT]
 > This integration is maintained for my private Home Assistant setup. It is public so it can be installed and updated through HACS as a custom repository. Bug reports are welcome, but there is no support promise, no compatibility guarantee, and no ambition to make this a general-purpose chores platform.
 >
