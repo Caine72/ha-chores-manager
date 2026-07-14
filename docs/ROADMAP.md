@@ -2,7 +2,7 @@
 
 ## Product direction
 
-Chores Manager is a private-use Home Assistant custom integration with a reliable v0.1 backend baseline, a v0.2 inventory and graphical management release, and a v0.3 backend contract for current-week admin correction.
+Chores Manager is a private-use Home Assistant custom integration with a reliable v0.1 backend baseline, a v0.2 inventory and graphical management release, a v0.3 backend contract for current-week admin correction, and v0.4 frontend-callable weekly-counter adjustments.
 
 Development order:
 
@@ -14,8 +14,9 @@ Development order:
 6. Add a graphical management interface for children, chores, and assignments so routine changes do not require manually calling actions.
 7. Add backend APIs for current-week admin correction.
 8. Complete backend v0.3 release acceptance.
-9. Start card implementation in a separate repository using this repository's documented contracts.
-10. Only then consider broader administration, generalization, or distribution.
+9. Add frontend-callable weekly-counter adjustment services.
+10. Start card implementation in a separate repository using this repository's documented contracts.
+11. Only then consider broader administration, generalization, or distribution.
 
 The source code and automated tests are authoritative if this document becomes stale.
 
@@ -36,6 +37,7 @@ The source code and automated tests are authoritative if this document becomes s
 - One-time default `Chores` label initialization that preserves user labels
 - Admin-only structural inventory WebSocket API
 - Admin-only current-week completion history and correction WebSocket APIs
+- Auditable current-week increment and decrement services with zero-clamped decrements
 - Focused automated test coverage for implemented behavior
 - Release hardening coverage for the registered midnight callback, legacy storage compatibility, and singleton config-flow behavior
 
@@ -154,6 +156,19 @@ The `0.3.0` backend release contains the admin WebSocket correction history and 
 Release-candidate validation completed on 2026-07-13:
 
 - `./scripts/validate`
+- `./scripts/run-real-ha-acceptance`
+
+The generated acceptance JSON and HTML reports are local artifacts and are not committed.
+
+## Completed milestone: backend v0.4 weekly counter adjustments
+
+The `0.4.0` backend release makes weekly totals suitable for cards that own their own wording and adds auditable manual adjustments. Weekly sensors now expose a unitless numeric state, while `increment_weekly_counter` and `decrement_weekly_counter` adjust the current chore week by `1-100` points. Decrements clamp at zero, and adjustments use the same current-plus-previous-week retention policy as completion snapshots.
+
+Release-candidate validation completed on 2026-07-13:
+
+- `./scripts/validate --fix`
+- `./scripts/validate`
+- `git diff --check`
 - `./scripts/run-real-ha-acceptance`
 
 The generated acceptance JSON and HTML reports are local artifacts and are not committed.

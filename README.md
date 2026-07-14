@@ -9,7 +9,7 @@ Chores Manager is a Home Assistant custom integration I use for tracking househo
 >
 > It is also vibe coded with AI assistance. The code is intended to be practical, understandable, and reliable for my household workflow rather than polished as a broadly maintained open-source project.
 
-Version `0.3.0` finalizes the backend contract needed by the separate card work. It retains the inventory-aware management from `0.2.0` and adds admin-only current-week correction history and completion correction APIs. The custom card remains a separate repository milestone.
+Version `0.4.0` adds frontend-callable weekly-counter adjustments. Weekly total sensors are unitless numeric states so cards own display wording such as `points`; adjustments remain auditable records rather than rewritten completion history.
 
 ## What it does
 
@@ -17,6 +17,7 @@ Chores Manager stores children, chores, assignments, and daily completion snapsh
 
 - weekly points sensors per child;
 - assignment switches that can be toggled on when a chore is completed today;
+- actions for incrementing or decrementing a child's current-week total;
 - Home Assistant actions for creating, editing, activating, deactivating, and deleting children, chores, and assignments;
 - stable IDs so renaming a child or chore does not break entity identity or history.
 
@@ -33,6 +34,7 @@ Current backend development scope is intentionally narrow:
 - no custom card in this repository;
 - read-only inventory API for graphical management and custom-card work;
 - admin-only current-week correction APIs for a separate correction card;
+- frontend-callable current-week counter adjustments;
 - no rewards, allowance logic, notifications, import/export, or diagnostics.
 
 The integration is named generally because the workflow may grow, but the current implementation is still shaped around one private household setup.
@@ -65,6 +67,7 @@ Weekly points sensors:
 - Entity ID: `sensor.kid_<n>_weekly_points`
 - Unique ID: `kid_<n>_weekly_points`
 - State: points earned by the child in the current chore week
+- Unit of measurement: none; the state is a numeric total only
 - Attributes: `child_id`, `kid_name`, `week_start`, `week_end`
 
 Assignment switches:
@@ -99,6 +102,8 @@ Actions are available under the `chores_manager` domain.
 | `delete_assignment` | `assignment_id` | none | Deletes one assignment and its switch registry entry while preserving completion snapshots. |
 | `delete_child` | `child_id` | none | Deletes a child, the weekly-points sensor registry entry, and that child's assignment switch registry entries while preserving completion snapshots. |
 | `delete_chore` | `chore_id` | none | Deletes a chore and related assignment switch registry entries while preserving completion snapshots. |
+| `increment_weekly_counter` | `child_id` | `amount`, `reason` | Adds a positive current-week adjustment. `amount` defaults to `1` and is limited to `1-100`. |
+| `decrement_weekly_counter` | `child_id` | `amount`, `reason` | Subtracts from the current-week total without allowing it to become negative. `amount` defaults to `1` and is limited to `1-100`. |
 
 Validation trims text input, rejects blank stable IDs, limits names/titles/categories to 100 characters, limits points to 1-100, requires non-negative `sort_order`, and validates icons with Home Assistant's icon selector rules.
 
@@ -108,7 +113,7 @@ Turning an assignment switch on completes that assignment for the current local 
 
 Completion records are immutable snapshots. They store the child name, chore title, category, and points as they existed when the completion was created. Later metadata edits do not rewrite historical completions.
 
-The chore week runs Saturday through Friday using Home Assistant's local time. Weekly points sensors count completions from the current chore week. Storage retention keeps the current chore week and the previous complete chore week; older completions are pruned on load and at local midnight when a new chore week starts.
+The chore week runs Saturday through Friday using Home Assistant's local time. Weekly points sensors total current-week completions and manual adjustments. Adjustments record their local date, timestamp, child, point delta, and optional reason; a decrement stores only the amount that can be subtracted from the current total, and is a no-op at zero. Storage retention keeps the current chore week and the previous complete chore week; older completions and adjustments are pruned on load and at local midnight when a new chore week starts.
 
 ## Activation And Deletion
 
@@ -120,7 +125,7 @@ Stable ID counters are monotonic. Deleted IDs are not reused.
 
 ## Storage Compatibility
 
-The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Version `0.3.0` preserves storage version `1`; upgrading from `0.1.0` or `0.2.0` requires no storage migration.
+The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Version `0.4.0` preserves storage version `1`; upgrading from `0.1.0`, `0.2.0`, or `0.3.0` requires no storage migration. Existing data gains empty adjustment storage on load.
 
 Storage and stable IDs are the source of truth. Labels are initialized for assignment switches as a secondary Home Assistant organization boundary and are not the primary integration contract.
 
@@ -163,4 +168,4 @@ For live Home Assistant acceptance, configure the local untracked `.real_ha_acce
 ./scripts/run-real-ha-acceptance
 ```
 
-The `0.3.0` release candidate passed `./scripts/validate` and real Home Assistant acceptance on 2026-07-13. The generated acceptance artifacts are local files and are not committed.
+The `0.4.0` release candidate passed `./scripts/validate` and real Home Assistant acceptance on 2026-07-13. The generated acceptance artifacts are local files and are not committed.
