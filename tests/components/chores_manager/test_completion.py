@@ -7,13 +7,13 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import HomeAssistant, State
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.core import Context, HomeAssistant, State
+from homeassistant.exceptions import ServiceValidationError, Unauthorized
 from homeassistant.util import dt as dt_util
 
 from .common import DOMAIN
 
-from tests.common import MockConfigEntry
+from tests.common import MockConfigEntry, MockUser
 
 CHORE_SWITCH = "switch.kid_1_chore_1"
 WEEKLY_POINTS_SENSOR = "sensor.kid_1_weekly_points"
@@ -203,6 +203,46 @@ async def test_adjust_weekly_counter_rejects_invalid_amount(
             {"child_id": "kid_1", "amount": 0},
             blocking=True,
         )
+
+
+async def test_adjustment_action_rejects_read_only_user(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_read_only_user: MockUser,
+) -> None:
+    """Test legacy adjustment actions enforce sensor control for users."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+
+    with pytest.raises(Unauthorized):
+        await hass.services.async_call(
+            DOMAIN,
+            "increment_weekly_counter",
+            {"child_id": "kid_1", "amount": 1},
+            blocking=True,
+            context=Context(user_id=hass_read_only_user.id),
+        )
+
+    assert loaded_config_entry.runtime_data.data["adjustments"] == {}
+
+
+async def test_adjustment_action_allows_non_admin_sensor_controller(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_read_only_user: MockUser,
+) -> None:
+    """Test legacy adjustment actions allow explicit entity control."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    hass_read_only_user.mock_policy({"entities": True})
+
+    await hass.services.async_call(
+        DOMAIN,
+        "increment_weekly_counter",
+        {"child_id": "kid_1", "amount": 1},
+        blocking=True,
+        context=Context(user_id=hass_read_only_user.id),
+    )
+
+    assert _state(hass, WEEKLY_POINTS_SENSOR).state == "1"
 
 
 async def test_complete_assignment_updates_state_points_and_snapshot(

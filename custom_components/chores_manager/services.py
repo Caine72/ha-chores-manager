@@ -5,11 +5,12 @@ from typing import cast
 
 import voluptuous as vol
 
+from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import ServiceValidationError, Unauthorized, UnknownUser
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.typing import ConfigType
 
@@ -320,6 +321,7 @@ async def _async_handle_adjust_weekly_counter(
 ) -> None:
     """Handle a weekly-counter adjustment action."""
     entry = _get_loaded_entry(hass)
+    await _async_require_points_control(hass, call, call.data[ATTR_CHILD_ID])
 
     try:
         await entry.runtime_data.async_adjust_weekly_counter(
@@ -335,6 +337,36 @@ async def _async_handle_adjust_weekly_counter(
                 "child_id": err.child_id,
             },
         ) from err
+
+
+async def _async_require_points_control(
+    hass: HomeAssistant,
+    call: ServiceCall,
+    child_id: str,
+) -> None:
+    """Require sensor control for a user-originated weekly-points adjustment."""
+    if call.context.user_id is None:
+        return
+
+    user = await hass.auth.async_get_user(call.context.user_id)
+    if user is None:
+        raise UnknownUser(context=call.context)
+    if user.is_admin:
+        return
+
+    entity_id = er.async_get(hass).async_get_entity_id(
+        SENSOR_DOMAIN,
+        DOMAIN,
+        f"{child_id}_weekly_points",
+    )
+    if entity_id is None or not user.permissions.check_entity(
+        entity_id, POLICY_CONTROL
+    ):
+        raise Unauthorized(
+            context=call.context,
+            entity_id=entity_id,
+            permission=POLICY_CONTROL,
+        )
 
 
 async def _async_handle_delete_assignment(

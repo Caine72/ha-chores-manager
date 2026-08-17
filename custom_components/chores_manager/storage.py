@@ -835,7 +835,11 @@ class ChoresManagerStore:
 
     def get_current_week_points(self, child_id: str) -> int:
         """Return the points earned by a child this chore week."""
-        week_start, week_end = self.get_current_week_bounds()
+        return self.get_week_points(child_id, dt_util.now().date())
+
+    def get_week_points(self, child_id: str, reference_date: date) -> int:
+        """Return points earned in the chore week containing a date."""
+        week_start, week_end = self.get_current_week_bounds(reference_date)
 
         completion_points = sum(
             completion["points"]

@@ -109,6 +109,10 @@ Actions are available under the `chores_manager` domain.
 
 Validation trims text input, rejects blank stable IDs, limits names/titles/categories to 100 characters, limits points to 1-100, requires non-negative `sort_order`, and validates icons with Home Assistant's icon selector rules.
 
+User-originated weekly-counter action calls require Home Assistant `control`
+permission for the child's weekly-points sensor. Calls without a user context, such as
+trusted internal automations, remain supported.
+
 ## Completion And Retention
 
 Turning an assignment switch on completes that assignment for the current local date. Turning it off removes that assignment's completion for the current local date.
@@ -136,6 +140,20 @@ Storage and stable IDs are the source of truth. Labels are initialized for assig
 Chores Manager exposes an admin-only Home Assistant WebSocket command, `chores_manager/inventory`, for read-only structural inventory. The response includes stored children, chores, assignments, active flags, relationships, current entity IDs where available, and current chore-week bounds. It includes inactive records and does not expose completion history. Mutations remain in the existing Home Assistant actions.
 
 See `docs/INVENTORY_CONTRACT.md` for the full response contract.
+
+## Weekly Points API
+
+The entity-authorized WebSocket commands `chores_manager/weekly_points` and
+`chores_manager/adjust_weekly_points` support parent-facing cards without granting
+structural administration. The read command returns current and previous complete
+chore-week totals and requires `read` permission for the child's weekly-points sensor.
+The response also reports whether the caller may adjust that total.
+The mutation command creates an audited current-week adjustment and requires `control`
+permission for that sensor. Its response includes the applied delta and
+backend-confirmed total.
+
+See `docs/WEEKLY_POINTS_CONTRACT.md` for request, response, authorization, and audit
+details.
 
 ## Admin Correction API
 
