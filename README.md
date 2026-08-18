@@ -11,7 +11,7 @@ Standalone Lovelace cards created for it [Chores Manager Cards](https://github.c
 >
 > It is also vibe coded with AI assistance. The code is intended to be practical, understandable, and reliable for my household workflow rather than polished as a broadly maintained open-source project.
 
-Version `0.4.0` adds frontend-callable weekly-counter adjustments. Weekly total sensors are unitless numeric states so cards own display wording such as `points`; adjustments remain auditable records rather than rewritten completion history.
+Version `0.5.0` adds entity-authorized current/previous weekly-points reads and audited card adjustments. Weekly total sensors remain unitless numeric states so cards own display wording such as `points`; adjustments remain audit records rather than rewritten completion history.
 
 ## What it does
 
@@ -131,7 +131,7 @@ Stable ID counters are monotonic. Deleted IDs are not reused.
 
 ## Storage Compatibility
 
-The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Version `0.4.0` preserves storage version `1`; upgrading from `0.1.0`, `0.2.0`, or `0.3.0` requires no storage migration. Existing data gains empty adjustment storage on load.
+The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Version `0.5.0` preserves storage version `1`; upgrading from `0.1.0`, `0.2.0`, `0.3.0`, or `0.4.0` requires no storage migration. Existing pre-`0.4.0` data gains empty adjustment storage on load.
 
 Storage and stable IDs are the source of truth. Labels are initialized for assignment switches as a secondary Home Assistant organization boundary and are not the primary integration contract.
 

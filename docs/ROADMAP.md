@@ -173,7 +173,7 @@ Release-candidate validation completed on 2026-07-13:
 
 The generated acceptance JSON and HTML reports are local artifacts and are not committed.
 
-## In progress: entity-authorized weekly-points card API
+## Completed milestone: backend v0.5 entity-authorized weekly-points card API
 
 Card implementation identified two missing backend boundaries: no supported read for
 the retained previous-week total, and adjustment actions whose child-only payload could
@@ -182,6 +182,14 @@ contract resolves the child to its weekly-points sensor, requires entity `read` 
 for totals and entity `control` access for adjustments, and returns the confirmed total
 after an audited mutation. Existing adjustment actions apply the same control check to
 user-originated calls while keeping trusted internal automations compatible.
+
+Release-candidate validation completed on 2026-08-18:
+
+- `./scripts/validate` (`105 passed`)
+- `git diff --check`
+- live Home Assistant current/previous totals read
+- live reversible audited adjustments through both the WebSocket API and overview card
+- desktop and mobile overview-card acceptance
 
 ## Integration-aware custom card
 
