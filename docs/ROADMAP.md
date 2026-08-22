@@ -12,13 +12,13 @@
 - [x] Optional child-to-Person presentation metadata without image storage or authorization coupling.
 - [x] Automated validation and repeatable real Home Assistant acceptance.
 
-## Current release work
+## Current release: 0.6.0
 
 - [x] Implement and document the history contract.
 - [x] Implement and document child Person association.
 - [x] Coordinate the contracts with all four cards.
-- [ ] Complete restricted-user, desktop, and mobile acceptance.
-- [ ] Finalize version compatibility, release notes, and release validation.
+- [x] Prepare version compatibility and release notes.
+- [ ] Apply the version bump, merge, and publish.
 
 ## Later
 

@@ -1,6 +1,6 @@
-# Current milestone: history and Person-association release acceptance
+# Current milestone: 0.6.0 release
 
-The backend contracts required by the standalone history card and automatic portraits are implemented. The remaining work is coordinated release acceptance with Chores Manager Cards.
+The backend contracts required by the standalone history card and automatic portraits are implemented and documented.
 
 ## Included
 
@@ -12,13 +12,11 @@ The backend contracts required by the standalone history card and automatic port
 - optional `person_entity_id` storage, native child configuration, entity attributes, and API responses;
 - no image storage and no authorization relationship through the Person association.
 
-## Acceptance before release
+## Remaining
 
-1. Run `./scripts/validate --fix` and `./scripts/validate`.
-2. Run the real Home Assistant acceptance workflow without exposing local credentials or artifacts.
-3. Verify history with administrator and restricted users.
-4. Verify child Person set, preserve, replace, and clear behavior.
-5. Validate Overview, Daily, History, and Correction against the matching cards branch.
-6. Record version compatibility and release notes before merging.
+1. Change the manifest version to `0.6.0`.
+2. Run final validation after the version change.
+3. Merge and confirm checks on `main`.
+4. Publish `v0.6.0` before releasing Chores Manager Cards `0.3.0`.
 
-The card remains in the separate Chores Manager Cards repository. This integration continues to own storage, dates, permissions, and mutation rules.
+See [the prepared release notes](RELEASE_0.6.0.md).
