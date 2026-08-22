@@ -49,6 +49,12 @@ sensor. `amount` is a signed non-zero integer from `-100` through `100`; `reason
 optional, trimmed, and limited to 200 characters. Positive amounts increment and
 negative amounts decrement. Decrements clamp at zero.
 
+Zero is an invariant for every weekly total, not only manual adjustments. Removing a
+completion through a chore switch or the dated correction API also floors the total at
+zero. If an existing audited decrement would otherwise make that removal negative, the
+backend stores an audited balancing adjustment. Legacy negative raw data is likewise
+reported as zero.
+
 The response contains `adjustment_id`, the requested and applied amounts, and the
 backend-confirmed current total. `adjustment_id` is `null` and `applied_amount` is zero
 when decrementing a zero total.

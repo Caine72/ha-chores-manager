@@ -635,26 +635,21 @@ class ChoresManagerStore:
             if child_id not in self.data["children"]:
                 raise UnknownChildError(child_id)
 
+            floor_changed = self._floor_current_week_points_at_zero(child_id)
             adjustment_points = amount
             if amount < 0:
                 current_points = self.get_current_week_points(child_id)
                 adjustment_points = -min(abs(amount), current_points)
                 if adjustment_points == 0:
+                    if floor_changed:
+                        await self.async_save()
                     return None
 
-            adjustment_number = self.data["next_adjustment_id"]
-            adjustment_id = f"adjustment_{adjustment_number}"
-            adjustment: AdjustmentData = {
-                "adjusted_at": dt_util.utcnow().isoformat(),
-                "local_date": dt_util.now().date().isoformat(),
-                "child_id": child_id,
-                "points": adjustment_points,
-            }
-            if reason:
-                adjustment["reason"] = reason
-
-            self.data["adjustments"][adjustment_id] = adjustment
-            self.data["next_adjustment_id"] = adjustment_number + 1
+            adjustment_id = self._store_adjustment(
+                child_id,
+                adjustment_points,
+                reason,
+            )
 
             await self.async_save()
 
@@ -724,8 +719,14 @@ class ChoresManagerStore:
                 if not completion_ids:
                     return None, False
 
+                child_ids = {
+                    self.data["completions"][completion_id]["child_id"]
+                    for completion_id in completion_ids
+                }
                 for completion_id in completion_ids:
                     del self.data["completions"][completion_id]
+                for child_id in child_ids:
+                    self._floor_current_week_points_at_zero(child_id)
 
                 await self.async_save()
                 return None, True
@@ -775,8 +776,14 @@ class ChoresManagerStore:
             if not completion_ids:
                 return False
 
+            child_ids = {
+                self.data["completions"][completion_id]["child_id"]
+                for completion_id in completion_ids
+            }
             for completion_id in completion_ids:
                 del self.data["completions"][completion_id]
+            for child_id in child_ids:
+                self._floor_current_week_points_at_zero(child_id)
 
             await self.async_save()
 
@@ -839,6 +846,10 @@ class ChoresManagerStore:
 
     def get_week_points(self, child_id: str, reference_date: date) -> int:
         """Return points earned in the chore week containing a date."""
+        return max(0, self._get_week_points_unclamped(child_id, reference_date))
+
+    def _get_week_points_unclamped(self, child_id: str, reference_date: date) -> int:
+        """Return the raw completion and adjustment sum for a chore week."""
         week_start, week_end = self.get_current_week_bounds(reference_date)
 
         completion_points = sum(
@@ -855,6 +866,42 @@ class ChoresManagerStore:
         )
 
         return completion_points + adjustment_points
+
+    def _floor_current_week_points_at_zero(self, child_id: str) -> bool:
+        """Store an audited offset when current-week points would be negative."""
+        current_date = dt_util.now().date()
+        raw_points = self._get_week_points_unclamped(child_id, current_date)
+        if raw_points >= 0:
+            return False
+
+        self._store_adjustment(
+            child_id,
+            -raw_points,
+            "Prevent weekly points below zero",
+        )
+        return True
+
+    def _store_adjustment(
+        self,
+        child_id: str,
+        points: int,
+        reason: str | None = None,
+    ) -> str:
+        """Store an adjustment while the caller holds the storage lock."""
+        adjustment_number = self.data["next_adjustment_id"]
+        adjustment_id = f"adjustment_{adjustment_number}"
+        adjustment: AdjustmentData = {
+            "adjusted_at": dt_util.utcnow().isoformat(),
+            "local_date": dt_util.now().date().isoformat(),
+            "child_id": child_id,
+            "points": points,
+        }
+        if reason:
+            adjustment["reason"] = reason
+
+        self.data["adjustments"][adjustment_id] = adjustment
+        self.data["next_adjustment_id"] = adjustment_number + 1
+        return adjustment_id
 
     def get_current_week_completions(self) -> list[tuple[str, CompletionData]]:
         """Return retained completion snapshots correctable during the current week."""

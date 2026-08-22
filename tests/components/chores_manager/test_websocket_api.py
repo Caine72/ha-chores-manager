@@ -554,6 +554,58 @@ async def test_set_current_week_completion_is_idempotent_and_updates_points(
     assert switch_state.state == "off"
 
 
+async def test_correction_removal_keeps_weekly_points_at_zero(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test dated correction removal cannot expose a negative weekly total."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+    )
+    local_date = dt_util.now().date().isoformat()
+    await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": True,
+        },
+    )
+    await _call_action(
+        hass,
+        "decrement_weekly_counter",
+        {"child_id": "kid_1", "amount": 2},
+    )
+
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": False,
+        },
+    )
+
+    assert response["success"]
+    points_state = hass.states.get(POINTS_SENSOR)
+    assert points_state is not None
+    assert points_state.state == "0"
+    assert [
+        adjustment["points"]
+        for adjustment in loaded_config_entry.runtime_data.data["adjustments"].values()
+    ] == [-2, 2]
+
+
 async def test_set_current_week_completion_allows_inactive_assignment_and_orphan_removal(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,

@@ -154,6 +154,31 @@ async def test_decrement_weekly_counter_at_zero_is_noop(
     assert loaded_config_entry.runtime_data.data["next_adjustment_id"] == 1
 
 
+async def test_uncompleting_after_decrement_keeps_weekly_points_at_zero(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test removing a completion cannot expose a negative weekly total."""
+    await _create_assignment(hass)
+    await _call_switch_action(hass, "turn_on")
+    await _call_action(
+        hass,
+        "decrement_weekly_counter",
+        {"child_id": "kid_1", "amount": 2},
+    )
+
+    await _call_switch_action(hass, "turn_off")
+
+    store = loaded_config_entry.runtime_data
+    assert _state(hass, WEEKLY_POINTS_SENSOR).state == "0"
+    assert [
+        adjustment["points"] for adjustment in store.data["adjustments"].values()
+    ] == [-2, 2]
+    assert store.data["adjustments"]["adjustment_2"]["reason"] == (
+        "Prevent weekly points below zero"
+    )
+
+
 @pytest.mark.usefixtures("loaded_config_entry")
 async def test_weekly_points_combine_completions_and_adjustments(
     hass: HomeAssistant,
