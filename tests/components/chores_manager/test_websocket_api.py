@@ -18,6 +18,7 @@ CHORE_SWITCH = "switch.kid_1_chore_1"
 POINTS_SENSOR = "sensor.kid_1_weekly_points"
 WS_TYPE_INVENTORY = "chores_manager/inventory"
 WS_TYPE_CURRENT_WEEK_COMPLETIONS = "chores_manager/current_week_completions"
+WS_TYPE_CURRENT_WEEK_HISTORY = "chores_manager/current_week_history"
 WS_TYPE_SET_CURRENT_WEEK_COMPLETION = "chores_manager/set_current_week_completion"
 WS_TYPE_WEEKLY_POINTS = "chores_manager/weekly_points"
 WS_TYPE_ADJUST_WEEKLY_POINTS = "chores_manager/adjust_weekly_points"
@@ -56,6 +57,148 @@ async def _get_current_week_completions(
     client = await hass_ws_client(hass)
     await client.send_json_auto_id({"type": WS_TYPE_CURRENT_WEEK_COMPLETIONS})
     return await client.receive_json()
+
+
+async def _get_current_week_history(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    child_id: str = "kid_1",
+    access_token: str | None = None,
+) -> dict[str, Any]:
+    """Fetch one child's current-week history over WebSocket."""
+    client = (
+        await hass_ws_client(hass)
+        if access_token is None
+        else await hass_ws_client(hass, access_token)
+    )
+    await client.send_json_auto_id(
+        {"type": WS_TYPE_CURRENT_WEEK_HISTORY, "child_id": child_id}
+    )
+    return await client.receive_json()
+
+
+async def test_current_week_history_allows_sensor_reader_and_scopes_child(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_access_token: str,
+) -> None:
+    """Test a sensor reader sees only the requested child's current week."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(hass, "add_child", {"name": "Isabelle"})
+    store = loaded_config_entry.runtime_data
+    week_start, _ = store.get_current_week_bounds()
+    today = dt_util.now().date()
+    store.data["completions"] = {
+        "completion_1": {
+            "completed_at": dt_util.utcnow().isoformat(),
+            "local_date": week_start.isoformat(),
+            "child_id": "kid_1",
+            "chore_id": "chore_deleted",
+            "assignment_id": "assignment_deleted",
+            "child_name": "Alex",
+            "chore_title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+        "completion_2": {
+            "completed_at": dt_util.utcnow().isoformat(),
+            "local_date": today.isoformat(),
+            "child_id": "kid_2",
+            "chore_id": "chore_2",
+            "assignment_id": "assignment_2",
+            "child_name": "Isabelle",
+            "chore_title": "Feed the cat",
+            "category": "Cat",
+            "points": 1,
+        },
+        "completion_3": {
+            "completed_at": dt_util.utcnow().isoformat(),
+            "local_date": (week_start - timedelta(days=1)).isoformat(),
+            "child_id": "kid_1",
+            "chore_id": "chore_3",
+            "assignment_id": "assignment_3",
+            "child_name": "Alex",
+            "chore_title": "Previous week",
+            "category": "Other",
+            "points": 5,
+        },
+    }
+
+    response = await _get_current_week_history(
+        hass,
+        hass_ws_client,
+        access_token=hass_read_only_access_token,
+    )
+
+    assert response["success"]
+    assert response["result"] == {
+        "child_id": "kid_1",
+        "child_name": "Alex",
+        "points_entity_id": POINTS_SENSOR,
+        "window": {
+            "start": week_start.isoformat(),
+            "end": today.isoformat(),
+        },
+        "completions": [
+            {
+                "completion_id": "completion_1",
+                "assignment_id": "assignment_deleted",
+                "assignment_exists": False,
+                "child_id": "kid_1",
+                "chore_id": "chore_deleted",
+                "local_date": week_start.isoformat(),
+                "completed_at": store.data["completions"]["completion_1"][
+                    "completed_at"
+                ],
+                "child_name": "Alex",
+                "chore_title": "Make the bed",
+                "category": "Morning",
+                "points": 2,
+            }
+        ],
+    }
+
+
+async def test_current_week_history_requires_sensor_read_permission(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_user: MockUser,
+    hass_read_only_access_token: str,
+) -> None:
+    """Test child history is hidden without weekly-sensor read access."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    hass_read_only_user.mock_policy({})
+
+    response = await _get_current_week_history(
+        hass,
+        hass_ws_client,
+        access_token=hass_read_only_access_token,
+    )
+
+    assert not response["success"]
+    assert response["error"]["code"] == "unauthorized"
+    assert loaded_config_entry.runtime_data.data["completions"] == {}
+
+
+async def test_current_week_history_rejects_unknown_child(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test history reports a missing child without exposing data."""
+    response = await _get_current_week_history(
+        hass,
+        hass_ws_client,
+        child_id="kid_missing",
+    )
+
+    assert not response["success"]
+    assert response["error"] == {
+        "code": "not_found",
+        "message": ("Child kid_missing or its weekly-points entity does not exist"),
+    }
 
 
 async def _set_current_week_completion(

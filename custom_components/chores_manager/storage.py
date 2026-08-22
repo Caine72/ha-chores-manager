@@ -937,8 +937,11 @@ class ChoresManagerStore:
         self.data["next_adjustment_id"] = adjustment_number + 1
         return adjustment_id
 
-    def get_current_week_completions(self) -> list[tuple[str, CompletionData]]:
-        """Return retained completion snapshots correctable during the current week."""
+    def get_current_week_completions(
+        self,
+        child_id: str | None = None,
+    ) -> list[tuple[str, CompletionData]]:
+        """Return retained completion snapshots from the current week."""
         today = dt_util.now().date()
         week_start, _ = self.get_current_week_bounds(today)
 
@@ -947,6 +950,7 @@ class ChoresManagerStore:
                 (completion_id, completion)
                 for completion_id, completion in self.data["completions"].items()
                 if week_start <= date.fromisoformat(completion["local_date"]) <= today
+                and (child_id is None or completion["child_id"] == child_id)
             ),
             key=lambda item: (
                 item[1]["local_date"],

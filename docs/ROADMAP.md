@@ -191,6 +191,10 @@ Release-candidate validation completed on 2026-08-18:
 - live reversible audited adjustments through both the WebSocket API and overview card
 - desktop and mobile overview-card acceptance
 
+## Current milestone: entity-authorized current-week history
+
+The standalone history card needs a read-only view of one child's current chore-week completions without receiving the administrator-only correction inventory. `chores_manager/current_week_history` resolves the child's weekly-points sensor, enforces Home Assistant entity read permission, and returns only that child's immutable snapshots within the backend-owned week window. Orphan snapshots remain readable while retained, and manual adjustments are excluded.
+
 ## Integration-aware custom card
 
 The custom card will not be built in this repository. Card and overview analysis is outside this backend release and card implementation starts in a separate repository. Add a link to that repository here once it is available.

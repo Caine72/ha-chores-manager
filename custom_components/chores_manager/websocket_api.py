@@ -26,6 +26,7 @@ from .storage import ChoresManagerStore
 
 WS_TYPE_INVENTORY = f"{DOMAIN}/inventory"
 WS_TYPE_CURRENT_WEEK_COMPLETIONS = f"{DOMAIN}/current_week_completions"
+WS_TYPE_CURRENT_WEEK_HISTORY = f"{DOMAIN}/current_week_history"
 WS_TYPE_SET_CURRENT_WEEK_COMPLETION = f"{DOMAIN}/set_current_week_completion"
 WS_TYPE_WEEKLY_POINTS = f"{DOMAIN}/weekly_points"
 WS_TYPE_ADJUST_WEEKLY_POINTS = f"{DOMAIN}/adjust_weekly_points"
@@ -53,6 +54,7 @@ def async_setup(hass: HomeAssistant) -> None:
     """Set up the Chores Manager WebSocket API."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_current_week_completions)
+    websocket_api.async_register_command(hass, websocket_current_week_history)
     websocket_api.async_register_command(hass, websocket_set_current_week_completion)
     websocket_api.async_register_command(hass, websocket_weekly_points)
     websocket_api.async_register_command(hass, websocket_adjust_weekly_points)
@@ -208,6 +210,7 @@ def _build_inventory(
 
 def _build_current_week_completions(
     store: ChoresManagerStore,
+    child_id: str | None = None,
 ) -> dict[str, Any]:
     """Build the read-only current-week correction history response."""
     week_start, _ = store.get_current_week_bounds()
@@ -233,8 +236,25 @@ def _build_current_week_completions(
                 "category": completion["category"],
                 "points": completion["points"],
             }
-            for completion_id, completion in store.get_current_week_completions()
+            for completion_id, completion in store.get_current_week_completions(
+                child_id
+            )
         ],
+    }
+
+
+def _build_current_week_history(
+    store: ChoresManagerStore,
+    child_id: str,
+    points_entity_id: str,
+) -> dict[str, Any]:
+    """Build entity-authorized current-week history for one child."""
+    history = _build_current_week_completions(store, child_id)
+    return {
+        "child_id": child_id,
+        "child_name": store.data["children"][child_id]["name"],
+        "points_entity_id": points_entity_id,
+        **history,
     }
 
 
@@ -274,6 +294,47 @@ def websocket_weekly_points(
         connection,
         result["points_entity_id"],
         POLICY_CONTROL,
+    )
+    connection.send_result(msg["id"], result)
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TYPE_CURRENT_WEEK_HISTORY,
+        vol.Required(ATTR_CHILD_ID): vol.All(str, str.strip, vol.Length(min=1)),
+    }
+)
+def websocket_current_week_history(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return authorized current-week completion history for one child."""
+    entry = _get_loaded_entry(hass)
+    if entry is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Chores Manager is not loaded",
+        )
+        return
+
+    child_id = msg[ATTR_CHILD_ID]
+    points_entity_id = _get_points_entity_id(hass, entry.runtime_data, child_id)
+    if points_entity_id is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            f"Child {child_id} or its weekly-points entity does not exist",
+        )
+        return
+
+    _require_points_permission(connection, points_entity_id, POLICY_READ)
+    result = _build_current_week_history(
+        entry.runtime_data,
+        child_id,
+        points_entity_id,
     )
     connection.send_result(msg["id"], result)
 

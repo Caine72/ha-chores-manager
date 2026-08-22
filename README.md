@@ -36,6 +36,7 @@ Current backend development scope is intentionally narrow:
 - no custom card in this repository;
 - read-only inventory API for graphical management and custom-card work;
 - admin-only current-week correction APIs for a separate correction card;
+- entity-authorized current-week history reads for a parent-facing history card;
 - frontend-callable current-week counter adjustments;
 - no rewards, allowance logic, notifications, import/export, or diagnostics.
 
@@ -154,6 +155,12 @@ backend-confirmed total.
 
 See `docs/WEEKLY_POINTS_CONTRACT.md` for request, response, authorization, and audit
 details.
+
+## Current-Week History API
+
+The entity-authorized `chores_manager/current_week_history` WebSocket command returns one child's immutable completion snapshots from the backend-calculated current chore week through today. The backend resolves the child's weekly-points sensor and requires Home Assistant `read` permission for that entity. The response includes the child identity, authorized entity ID, backend date window, and completion snapshots, including retained orphan snapshots whose assignment was deleted. Manual point adjustments are intentionally excluded.
+
+See `docs/HISTORY_CONTRACT.md` for the request, response, authorization, and rendering boundaries.
 
 ## Admin Correction API
 
