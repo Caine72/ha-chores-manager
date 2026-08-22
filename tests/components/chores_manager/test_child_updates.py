@@ -3,6 +3,7 @@
 from unittest.mock import patch
 
 import pytest
+import voluptuous as vol
 
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_RESTORED, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant, State
@@ -307,6 +308,67 @@ async def test_update_child_is_idempotent(
     assert store.data["next_assignment_id"] == 2
     assert _state(hass, ALEX_POINTS).name == "Alex weekly points"
     assert _state(hass, ALEX_CHORE_1).name == "Alex Make the bed"
+
+
+async def test_child_person_association_refreshes_live_entity_metadata(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test a child can inherit a portrait from an optional Person entity."""
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+    )
+
+    store = loaded_config_entry.runtime_data
+    assert store.data["children"]["kid_1"]["person_entity_id"] == "person.alex"
+    assert _state(hass, ALEX_POINTS).attributes["person_entity_id"] == "person.alex"
+    assert _state(hass, ALEX_CHORE_1).attributes["person_entity_id"] == "person.alex"
+
+    await _call_action(
+        hass,
+        "update_child",
+        {"child_id": "kid_1", "name": "Alexander"},
+    )
+    assert store.data["children"]["kid_1"]["person_entity_id"] == "person.alex"
+
+    await _call_action(
+        hass,
+        "update_child",
+        {
+            "child_id": "kid_1",
+            "name": "Alexander",
+            "person_entity_id": None,
+        },
+    )
+    assert "person_entity_id" not in store.data["children"]["kid_1"]
+    assert "person_entity_id" not in _state(hass, ALEX_POINTS).attributes
+    assert "person_entity_id" not in _state(hass, ALEX_CHORE_1).attributes
+
+
+async def test_child_person_association_rejects_non_person_entity(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test child portrait associations accept only Person entity IDs."""
+    with pytest.raises(vol.Invalid):
+        await _call_action(
+            hass,
+            "add_child",
+            {"name": "Alex", "person_entity_id": "sensor.alex"},
+        )
+
+    assert loaded_config_entry.runtime_data.data["children"] == {}
 
 
 async def test_update_child_rejects_unknown_child(

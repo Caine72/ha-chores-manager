@@ -20,6 +20,7 @@ from .const import (
     ATTR_CHORE_IDS,
     ATTR_ICON,
     ATTR_NAME,
+    ATTR_PERSON_ENTITY_ID,
     ATTR_POINTS,
     ATTR_SORT_ORDER,
     ATTR_TITLE,
@@ -423,14 +424,27 @@ class ChoresManagerOptionsFlow(OptionsFlow):
         """Add a child."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            error = await self._async_call_action(SERVICE_ADD_CHILD, user_input)
+            error = await self._async_call_action(
+                SERVICE_ADD_CHILD,
+                {
+                    **user_input,
+                    ATTR_PERSON_ENTITY_ID: user_input.get(ATTR_PERSON_ENTITY_ID),
+                },
+            )
             if error is None:
                 return await self.async_step_children_menu()
             errors["base"] = error
 
         return self.async_show_form(
             step_id="add_child",
-            data_schema=vol.Schema({vol.Required(ATTR_NAME): selector.TextSelector()}),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(ATTR_NAME): selector.TextSelector(),
+                    vol.Optional(ATTR_PERSON_ENTITY_ID): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="person")
+                    ),
+                }
+            ),
             errors=errors,
         )
 
@@ -509,7 +523,11 @@ class ChoresManagerOptionsFlow(OptionsFlow):
         if user_input is not None:
             error = await self._async_call_action(
                 SERVICE_UPDATE_CHILD,
-                {ATTR_CHILD_ID: self._selected_child_id, **user_input},
+                {
+                    ATTR_CHILD_ID: self._selected_child_id,
+                    **user_input,
+                    ATTR_PERSON_ENTITY_ID: user_input.get(ATTR_PERSON_ENTITY_ID),
+                },
             )
             if error is None:
                 return await self.async_step_child_actions()
@@ -517,12 +535,19 @@ class ChoresManagerOptionsFlow(OptionsFlow):
 
         return self.async_show_form(
             step_id="edit_child",
-            data_schema=vol.Schema(
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(
+                    {
+                        vol.Required(ATTR_NAME): selector.TextSelector(),
+                        vol.Optional(ATTR_PERSON_ENTITY_ID): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="person")
+                        ),
+                    }
+                ),
                 {
-                    vol.Required(
-                        ATTR_NAME, default=child["name"]
-                    ): selector.TextSelector(),
-                }
+                    ATTR_NAME: child["name"],
+                    ATTR_PERSON_ENTITY_ID: child.get("person_entity_id"),
+                },
             ),
             errors=errors,
         )

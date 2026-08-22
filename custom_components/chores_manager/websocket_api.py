@@ -123,7 +123,7 @@ def _build_weekly_points(
     previous_start = current_start - timedelta(days=7)
     previous_end = current_start - timedelta(days=1)
 
-    return {
+    result = {
         "child_id": child_id,
         "child_name": store.data["children"][child_id]["name"],
         "points_entity_id": points_entity_id,
@@ -138,6 +138,9 @@ def _build_weekly_points(
             "points": store.get_week_points(child_id, previous_start),
         },
     }
+    if person_entity_id := store.data["children"][child_id].get("person_entity_id"):
+        result["person_entity_id"] = person_entity_id
+    return result
 
 
 def _build_inventory(
@@ -158,6 +161,11 @@ def _build_inventory(
                     SENSOR_DOMAIN,
                     DOMAIN,
                     f"{child_id}_weekly_points",
+                ),
+                **(
+                    {"person_entity_id": child["person_entity_id"]}
+                    if child.get("person_entity_id")
+                    else {}
                 ),
             }
             for child_id, child in sorted(
@@ -250,12 +258,15 @@ def _build_current_week_history(
 ) -> dict[str, Any]:
     """Build entity-authorized current-week history for one child."""
     history = _build_current_week_completions(store, child_id)
-    return {
+    result = {
         "child_id": child_id,
         "child_name": store.data["children"][child_id]["name"],
         "points_entity_id": points_entity_id,
         **history,
     }
+    if person_entity_id := store.data["children"][child_id].get("person_entity_id"):
+        result["person_entity_id"] = person_entity_id
+    return result
 
 
 @callback

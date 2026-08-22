@@ -71,20 +71,20 @@ Weekly points sensors:
 - Unique ID: `kid_<n>_weekly_points`
 - State: points earned by the child in the current chore week
 - Unit of measurement: none; the state is a numeric total only
-- Attributes: `child_id`, `kid_name`, `week_start`, `week_end`
+- Attributes: `child_id`, `kid_name`, optional `person_entity_id`, `week_start`, `week_end`
 
 Assignment switches:
 
 - Entity ID: `switch.kid_<n>_chore_<n>`
 - Unique ID: `assignment_<n>`
 - State: `on` when the assignment is completed today, `off` otherwise
-- Attributes: `assignment_id`, `child_id`, `kid_name`, `chore_id`, `title`, `category`, `points`, `sort_order`, `completion_mode`
+- Attributes: `assignment_id`, `child_id`, `kid_name`, optional `person_entity_id`, `chore_id`, `title`, `category`, `points`, `sort_order`, `completion_mode`
 
 Entity IDs and unique IDs are derived from stable integration IDs, not display names. Renaming a child or chore does not change identity.
 
 ## Native Management
 
-For occasional household administration, open **Settings -> Devices & services -> Chores Manager -> Configure**. Week settings select the weekday after which a new chore week begins. A changed weekday applies immediately using the selected day's most recent occurrence; for example, changing to reset after Thursday on Saturday starts the current week on the Friday just passed. The same options flow can create, edit, activate, deactivate, and delete children and chores. It can assign or remove multiple chores for one child, and manage individual active or inactive assignments. It shows active and inactive records and asks for confirmation before removal or deletion; deleting structure removes related live entities while retaining completion history.
+For occasional household administration, open **Settings -> Devices & services -> Chores Manager -> Configure**. Week settings select the weekday after which a new chore week begins. A changed weekday applies immediately using the selected day's most recent occurrence; for example, changing to reset after Thursday on Saturday starts the current week on the Friday just passed. The same options flow can create, edit, activate, deactivate, and delete children and chores. Each child may optionally reference a Home Assistant Person whose existing profile image is used by compatible cards; Chores Manager does not copy or store that image. It can assign or remove multiple chores for one child, and manage individual active or inactive assignments. It shows active and inactive records and asks for confirmation before removal or deletion; deleting structure removes related live entities while retaining completion history.
 
 ## Actions
 
@@ -92,8 +92,8 @@ Actions are available under the `chores_manager` domain.
 
 | Action | Required fields | Optional fields | Behavior |
 | --- | --- | --- | --- |
-| `add_child` | `name` | none | Creates an active child and weekly-points sensor. |
-| `update_child` | `child_id`, `name` | none | Updates the child's display name without changing stable IDs or history. |
+| `add_child` | `name` | `person_entity_id` | Creates an active child and weekly-points sensor with an optional Home Assistant Person association. |
+| `update_child` | `child_id`, `name` | `person_entity_id` | Updates the child's display name or Person association without changing stable IDs or history. Omit the Person field to preserve it; pass `null` to clear it. |
 | `set_child_active` | `child_id`, `active` | none | Deactivates or reactivates a child. Stored child data, assignments, and history are preserved. |
 | `add_chore` | `title`, `category`, `points` | `icon`, `sort_order`, `child_ids` | Creates an active chore and assignments. When `child_ids` is omitted, all active children are assigned. |
 | `update_chore` | `chore_id` | `title`, `category`, `points`, `icon`, `sort_order` | Updates editable chore metadata for future state and completions. At least one editable field is required. |
@@ -134,7 +134,7 @@ Stable ID counters are monotonic. Deleted IDs are not reused.
 
 The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Version `0.5.0` preserves storage version `1`; upgrading from `0.1.0`, `0.2.0`, `0.3.0`, or `0.4.0` requires no storage migration. Existing pre-`0.4.0` data gains empty adjustment storage on load.
 
-Storage and stable IDs are the source of truth. Labels are initialized for assignment switches as a secondary Home Assistant organization boundary and are not the primary integration contract.
+Storage and stable IDs are the source of truth. An optional Person entity ID is presentation metadata only: it does not link authorization, users, trackers, points, or history. Labels are initialized for assignment switches as a secondary Home Assistant organization boundary and are not the primary integration contract.
 
 ## Inventory API
 

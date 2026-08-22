@@ -37,6 +37,7 @@ from .exceptions import (
 )
 
 type StoreListener = Callable[[], None]
+_PERSON_ENTITY_UNCHANGED = object()
 
 
 class ChildData(TypedDict):
@@ -44,6 +45,7 @@ class ChildData(TypedDict):
 
     name: str
     active: bool
+    person_entity_id: NotRequired[str]
 
 
 class ChoreData(TypedDict):
@@ -267,16 +269,23 @@ class ChoresManagerStore:
         for listener in tuple(self._listeners):
             listener()
 
-    async def async_add_child(self, name: str) -> str:
+    async def async_add_child(
+        self,
+        name: str,
+        person_entity_id: str | None = None,
+    ) -> str:
         """Add a child and return its stable ID."""
         async with self._lock:
             child_number = self.data["next_child_id"]
             child_id = f"kid_{child_number}"
 
-            self.data["children"][child_id] = {
+            child: ChildData = {
                 "name": name,
                 "active": True,
             }
+            if person_entity_id is not None:
+                child["person_entity_id"] = person_entity_id
+            self.data["children"][child_id] = child
             self.data["next_child_id"] = child_number + 1
 
             await self.async_save()
@@ -287,6 +296,7 @@ class ChoresManagerStore:
         self,
         child_id: str,
         name: str,
+        person_entity_id: str | None | object = _PERSON_ENTITY_UNCHANGED,
     ) -> bool:
         """Update child metadata and return whether it changed."""
         async with self._lock:
@@ -294,10 +304,19 @@ class ChoresManagerStore:
             if child is None:
                 raise UnknownChildError(child_id)
 
-            if child["name"] == name:
+            person_changed = (
+                person_entity_id is not _PERSON_ENTITY_UNCHANGED
+                and child.get("person_entity_id") != person_entity_id
+            )
+            if child["name"] == name and not person_changed:
                 return False
 
             child["name"] = name
+            if person_entity_id is not _PERSON_ENTITY_UNCHANGED:
+                if person_entity_id is None:
+                    child.pop("person_entity_id", None)
+                elif isinstance(person_entity_id, str):
+                    child["person_entity_id"] = person_entity_id
             await self.async_save()
 
         return True

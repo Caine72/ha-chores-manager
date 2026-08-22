@@ -22,6 +22,7 @@ names are not authorization boundaries.
 {
   "child_id": "kid_1",
   "child_name": "Alex",
+  "person_entity_id": "person.alex",
   "points_entity_id": "sensor.kid_1_weekly_points",
   "window": {"start": "2026-08-21", "end": "2026-08-22"},
   "completions": [
@@ -50,3 +51,5 @@ this contract describes completed chores rather than the total's audit ledger.
 
 Consumers must render the returned dates and snapshots and must not calculate a fixed
 reset weekday or parse display text as business data.
+
+`person_entity_id` is optional current child presentation metadata. It is not copied into immutable completion snapshots and is not an authorization boundary.

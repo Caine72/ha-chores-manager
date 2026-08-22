@@ -124,7 +124,7 @@ class ChoreAssignmentSwitch(SwitchEntity):
         child = self._child
         chore = self._chore
 
-        return {
+        attributes = {
             "assignment_id": self._assignment_id,
             "child_id": assignment["child_id"],
             "kid_name": child["name"],
@@ -135,6 +135,9 @@ class ChoreAssignmentSwitch(SwitchEntity):
             "sort_order": chore["sort_order"],
             "completion_mode": chore["completion_mode"],
         }
+        if person_entity_id := child.get("person_entity_id"):
+            attributes["person_entity_id"] = person_entity_id
+        return attributes
 
     async def async_added_to_hass(self) -> None:
         """Initialize registry metadata and subscribe to data changes."""

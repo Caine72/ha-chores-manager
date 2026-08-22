@@ -51,12 +51,16 @@
         "name": {
           "name": "Name",
           "description": "The display name of the child."
+        },
+        "person_entity_id": {
+          "name": "Person",
+          "description": "Optional Home Assistant Person used for the child's portrait."
         }
       }
     },
     "update_child": {
       "name": "Update child",
-      "description": "Updates a child's display name without changing stable IDs or completion history.",
+      "description": "Updates a child's display name or optional Person association without changing stable IDs or completion history.",
       "fields": {
         "child_id": {
           "name": "Child ID",
@@ -65,6 +69,10 @@
         "name": {
           "name": "Name",
           "description": "The new display name of the child."
+        },
+        "person_entity_id": {
+          "name": "Person",
+          "description": "Optional Home Assistant Person used for the child's portrait. Set to null to remove the association."
         }
       }
     },
@@ -352,7 +360,8 @@
       },
       "add_child": {
         "data": {
-          "name": "Name"
+          "name": "Name",
+          "person_entity_id": "Person (optional)"
         },
         "title": "Add child",
         "submit": "Add child"
@@ -378,7 +387,8 @@
       },
       "edit_child": {
         "data": {
-          "name": "Name"
+          "name": "Name",
+          "person_entity_id": "Person (optional)"
         },
         "title": "Edit child",
         "submit": "Save child"

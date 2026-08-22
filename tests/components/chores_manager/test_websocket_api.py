@@ -84,7 +84,11 @@ async def test_current_week_history_allows_sensor_reader_and_scopes_child(
     hass_read_only_access_token: str,
 ) -> None:
     """Test a sensor reader sees only the requested child's current week."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
     await _call_action(hass, "add_child", {"name": "Isabelle"})
     store = loaded_config_entry.runtime_data
     week_start, _ = store.get_current_week_bounds()
@@ -135,6 +139,7 @@ async def test_current_week_history_allows_sensor_reader_and_scopes_child(
     assert response["result"] == {
         "child_id": "kid_1",
         "child_name": "Alex",
+        "person_entity_id": "person.alex",
         "points_entity_id": POINTS_SENSOR,
         "window": {
             "start": week_start.isoformat(),
@@ -168,7 +173,11 @@ async def test_current_week_history_requires_sensor_read_permission(
     hass_read_only_access_token: str,
 ) -> None:
     """Test child history is hidden without weekly-sensor read access."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
     hass_read_only_user.mock_policy({})
 
     response = await _get_current_week_history(
@@ -252,7 +261,11 @@ async def test_weekly_points_returns_current_and_previous_totals(
     hass_read_only_access_token: str,
 ) -> None:
     """Test an entity reader can fetch both retained chore-week totals."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
     store = loaded_config_entry.runtime_data
     current_start, current_end = store.get_current_week_bounds()
     previous_start = current_start - timedelta(days=7)
@@ -289,6 +302,7 @@ async def test_weekly_points_returns_current_and_previous_totals(
     assert response["result"] == {
         "child_id": "kid_1",
         "child_name": "Alex",
+        "person_entity_id": "person.alex",
         "points_entity_id": POINTS_SENSOR,
         "can_adjust": False,
         "current_week": {
@@ -312,7 +326,11 @@ async def test_weekly_points_requires_sensor_read_permission(
     hass_read_only_access_token: str,
 ) -> None:
     """Test retained totals are hidden without points-sensor read access."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
     hass_read_only_user.mock_policy({})
 
     response = await _get_weekly_points(
@@ -331,7 +349,11 @@ async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
     hass_read_only_access_token: str,
 ) -> None:
     """Test a non-admin with entity control can create an audited adjustment."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
     hass_read_only_user.mock_policy({"entities": True})
 
     totals_response = await _get_weekly_points(
@@ -415,7 +437,11 @@ async def test_inventory_returns_stored_structure_and_entity_registry_ids(
     hass_ws_client: WebSocketGenerator,
 ) -> None:
     """Test inventory exposes structure, inactive records, and registry IDs."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
     await _call_action(hass, "add_child", {"name": "Isabelle"})
     await _call_action(
         hass,
@@ -465,6 +491,7 @@ async def test_inventory_returns_stored_structure_and_entity_registry_ids(
             {
                 "child_id": "kid_1",
                 "name": "Alex",
+                "person_entity_id": "person.alex",
                 "active": True,
                 "points_entity_id": "sensor.alex_weekly_points",
             },
