@@ -1,26 +1,41 @@
 """WebSocket API for Chores Manager."""
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, cast
 
 import voluptuous as vol
 
+from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 from homeassistant.components import websocket_api
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
-from .const import ATTR_ASSIGNMENT_ID, DOMAIN
-from .exceptions import CorrectionDateOutsideCurrentWeekError, UnknownAssignmentError
+from .const import ATTR_AMOUNT, ATTR_ASSIGNMENT_ID, ATTR_CHILD_ID, ATTR_REASON, DOMAIN
+from .exceptions import (
+    CorrectionDateOutsideCurrentWeekError,
+    UnknownAssignmentError,
+    UnknownChildError,
+)
 from .models import ChoresManagerConfigEntry
 from .storage import ChoresManagerStore
 
 WS_TYPE_INVENTORY = f"{DOMAIN}/inventory"
 WS_TYPE_CURRENT_WEEK_COMPLETIONS = f"{DOMAIN}/current_week_completions"
 WS_TYPE_SET_CURRENT_WEEK_COMPLETION = f"{DOMAIN}/set_current_week_completion"
+WS_TYPE_WEEKLY_POINTS = f"{DOMAIN}/weekly_points"
+WS_TYPE_ADJUST_WEEKLY_POINTS = f"{DOMAIN}/adjust_weekly_points"
+
+
+def _nonzero_amount(value: int) -> int:
+    """Validate that a signed adjustment amount is non-zero."""
+    if value == 0:
+        raise vol.Invalid("amount must not be zero")
+    return value
 
 
 def _stable_id_sort_key(stable_id: str) -> tuple[str, int, str]:
@@ -39,6 +54,8 @@ def async_setup(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_current_week_completions)
     websocket_api.async_register_command(hass, websocket_set_current_week_completion)
+    websocket_api.async_register_command(hass, websocket_weekly_points)
+    websocket_api.async_register_command(hass, websocket_adjust_weekly_points)
 
 
 def _get_loaded_entry(hass: HomeAssistant) -> ChoresManagerConfigEntry | None:
@@ -49,6 +66,76 @@ def _get_loaded_entry(hass: HomeAssistant) -> ChoresManagerConfigEntry | None:
         return None
 
     return cast(ChoresManagerConfigEntry, entries[0])
+
+
+def _get_points_entity_id(
+    hass: HomeAssistant,
+    store: ChoresManagerStore,
+    child_id: str,
+) -> str | None:
+    """Resolve a child's weekly-points entity ID."""
+    if child_id not in store.data["children"]:
+        return None
+
+    return er.async_get(hass).async_get_entity_id(
+        SENSOR_DOMAIN,
+        DOMAIN,
+        f"{child_id}_weekly_points",
+    )
+
+
+def _require_points_permission(
+    connection: websocket_api.ActiveConnection,
+    entity_id: str,
+    permission: str,
+) -> None:
+    """Require an entity permission for a weekly-points command."""
+    if not connection.user.permissions.check_entity(entity_id, permission):
+        raise Unauthorized(
+            user_id=connection.user.id,
+            entity_id=entity_id,
+            permission=permission,
+        )
+
+
+def _has_points_permission(
+    connection: websocket_api.ActiveConnection,
+    entity_id: str,
+    permission: str,
+) -> bool:
+    """Return whether a connection has an entity permission."""
+    return connection.user.permissions.check_entity(entity_id, permission)
+
+
+def _build_weekly_points(
+    hass: HomeAssistant,
+    store: ChoresManagerStore,
+    child_id: str,
+) -> dict[str, Any] | None:
+    """Build current and previous weekly totals for one child."""
+    points_entity_id = _get_points_entity_id(hass, store, child_id)
+    if points_entity_id is None:
+        return None
+
+    current_start, current_end = store.get_current_week_bounds()
+    previous_start = current_start - timedelta(days=7)
+    previous_end = current_start - timedelta(days=1)
+
+    return {
+        "child_id": child_id,
+        "child_name": store.data["children"][child_id]["name"],
+        "points_entity_id": points_entity_id,
+        "current_week": {
+            "start": current_start.isoformat(),
+            "end": current_end.isoformat(),
+            "points": store.get_week_points(child_id, current_start),
+        },
+        "previous_week": {
+            "start": previous_start.isoformat(),
+            "end": previous_end.isoformat(),
+            "points": store.get_week_points(child_id, previous_start),
+        },
+    }
 
 
 def _build_inventory(
@@ -149,6 +236,119 @@ def _build_current_week_completions(
             for completion_id, completion in store.get_current_week_completions()
         ],
     }
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TYPE_WEEKLY_POINTS,
+        vol.Required(ATTR_CHILD_ID): vol.All(str, str.strip, vol.Length(min=1)),
+    }
+)
+def websocket_weekly_points(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return authorized current and previous weekly points for a child."""
+    entry = _get_loaded_entry(hass)
+    if entry is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Chores Manager is not loaded",
+        )
+        return
+
+    result = _build_weekly_points(hass, entry.runtime_data, msg[ATTR_CHILD_ID])
+    if result is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            f"Child {msg[ATTR_CHILD_ID]} or its weekly-points entity does not exist",
+        )
+        return
+
+    _require_points_permission(connection, result["points_entity_id"], POLICY_READ)
+    result["can_adjust"] = _has_points_permission(
+        connection,
+        result["points_entity_id"],
+        POLICY_CONTROL,
+    )
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TYPE_ADJUST_WEEKLY_POINTS,
+        vol.Required(ATTR_CHILD_ID): vol.All(str, str.strip, vol.Length(min=1)),
+        vol.Required(ATTR_AMOUNT): vol.All(
+            vol.Coerce(int),
+            vol.Range(min=-100, max=100),
+            _nonzero_amount,
+        ),
+        vol.Optional(ATTR_REASON): vol.All(
+            str,
+            str.strip,
+            vol.Length(min=1, max=200),
+        ),
+    }
+)
+@websocket_api.async_response
+async def websocket_adjust_weekly_points(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Make an authorized audited adjustment to current weekly points."""
+    entry = _get_loaded_entry(hass)
+    if entry is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Chores Manager is not loaded",
+        )
+        return
+
+    store = entry.runtime_data
+    entity_id = _get_points_entity_id(hass, store, msg[ATTR_CHILD_ID])
+    if entity_id is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            f"Child {msg[ATTR_CHILD_ID]} or its weekly-points entity does not exist",
+        )
+        return
+
+    _require_points_permission(connection, entity_id, POLICY_CONTROL)
+    previous_total = store.get_current_week_points(msg[ATTR_CHILD_ID])
+
+    try:
+        adjustment_id = await store.async_adjust_weekly_counter(
+            msg[ATTR_CHILD_ID],
+            msg[ATTR_AMOUNT],
+            msg.get(ATTR_REASON),
+        )
+    except UnknownChildError:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            f"Child {msg[ATTR_CHILD_ID]} does not exist",
+        )
+        return
+
+    current_total = store.get_current_week_points(msg[ATTR_CHILD_ID])
+    connection.send_result(
+        msg["id"],
+        {
+            "child_id": msg[ATTR_CHILD_ID],
+            "points_entity_id": entity_id,
+            "adjustment_id": adjustment_id,
+            "requested_amount": msg[ATTR_AMOUNT],
+            "applied_amount": current_total - previous_total,
+            "current_points": current_total,
+        },
+    )
 
 
 @callback

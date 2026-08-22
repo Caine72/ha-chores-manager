@@ -24,6 +24,7 @@ ATTR_POINTS: Final = "points"
 ATTR_REASON: Final = "reason"
 ATTR_SORT_ORDER: Final = "sort_order"
 ATTR_TITLE: Final = "title"
+CONF_RESET_AFTER_WEEKDAY: Final = "reset_after_weekday"
 
 COMPLETION_MODE_INDEPENDENT: Final = "independent"
 
@@ -52,8 +53,18 @@ PLATFORMS: Final = (
 
 UNIT_POINTS: Final = "points"
 
-# datetime.date.weekday(): Monday is 0 and Saturday is 5.
-WEEK_START_WEEKDAY: Final = 5
+# Resetting after Friday preserves the existing Saturday-Friday chore week.
+WEEKDAY_NAMES: Final = (
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+)
+DEFAULT_RESET_AFTER_WEEKDAY: Final = "friday"
+HISTORY_RETENTION_DAYS: Final = 14
 CHORES_LABEL_NAME: Final = "Chores"
 CHORES_LABEL_ICON: Final = "mdi:format-list-checks"
 CHORES_LABEL_DESCRIPTION: Final = "Chore assignment entities managed by Chores Manager."

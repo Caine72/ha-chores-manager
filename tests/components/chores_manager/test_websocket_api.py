@@ -11,7 +11,7 @@ from homeassistant.util import dt as dt_util
 
 from .common import DOMAIN
 
-from tests.common import MockConfigEntry
+from tests.common import MockConfigEntry, MockUser
 from tests.typing import WebSocketGenerator
 
 CHORE_SWITCH = "switch.kid_1_chore_1"
@@ -19,6 +19,8 @@ POINTS_SENSOR = "sensor.kid_1_weekly_points"
 WS_TYPE_INVENTORY = "chores_manager/inventory"
 WS_TYPE_CURRENT_WEEK_COMPLETIONS = "chores_manager/current_week_completions"
 WS_TYPE_SET_CURRENT_WEEK_COMPLETION = "chores_manager/set_current_week_completion"
+WS_TYPE_WEEKLY_POINTS = "chores_manager/weekly_points"
+WS_TYPE_ADJUST_WEEKLY_POINTS = "chores_manager/adjust_weekly_points"
 
 
 async def _call_action(
@@ -67,6 +69,201 @@ async def _set_current_week_completion(
         {"type": WS_TYPE_SET_CURRENT_WEEK_COMPLETION, **data}
     )
     return await client.receive_json()
+
+
+async def _get_weekly_points(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    access_token: str | None = None,
+) -> dict[str, Any]:
+    """Fetch current and previous weekly points over WebSocket."""
+    client = (
+        await hass_ws_client(hass)
+        if access_token is None
+        else await hass_ws_client(hass, access_token)
+    )
+    await client.send_json_auto_id({"type": WS_TYPE_WEEKLY_POINTS, "child_id": "kid_1"})
+    return await client.receive_json()
+
+
+async def _adjust_weekly_points(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    data: dict[str, object],
+    access_token: str | None = None,
+) -> dict[str, Any]:
+    """Adjust current weekly points over WebSocket."""
+    client = (
+        await hass_ws_client(hass)
+        if access_token is None
+        else await hass_ws_client(hass, access_token)
+    )
+    await client.send_json_auto_id({"type": WS_TYPE_ADJUST_WEEKLY_POINTS, **data})
+    return await client.receive_json()
+
+
+async def test_weekly_points_returns_current_and_previous_totals(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_access_token: str,
+) -> None:
+    """Test an entity reader can fetch both retained chore-week totals."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    store = loaded_config_entry.runtime_data
+    current_start, current_end = store.get_current_week_bounds()
+    previous_start = current_start - timedelta(days=7)
+    previous_end = current_start - timedelta(days=1)
+    store.data["completions"]["completion_1"] = {
+        "completed_at": dt_util.utcnow().isoformat(),
+        "local_date": previous_start.isoformat(),
+        "child_id": "kid_1",
+        "chore_id": "chore_1",
+        "assignment_id": "assignment_1",
+        "child_name": "Alex",
+        "chore_title": "Make the bed",
+        "category": "Morning",
+        "points": 4,
+    }
+    store.data["adjustments"]["adjustment_1"] = {
+        "adjusted_at": dt_util.utcnow().isoformat(),
+        "local_date": previous_end.isoformat(),
+        "child_id": "kid_1",
+        "points": 3,
+    }
+    store.data["adjustments"]["adjustment_2"] = {
+        "adjusted_at": dt_util.utcnow().isoformat(),
+        "local_date": current_start.isoformat(),
+        "child_id": "kid_1",
+        "points": 2,
+    }
+
+    response = await _get_weekly_points(
+        hass, hass_ws_client, hass_read_only_access_token
+    )
+
+    assert response["success"]
+    assert response["result"] == {
+        "child_id": "kid_1",
+        "child_name": "Alex",
+        "points_entity_id": POINTS_SENSOR,
+        "can_adjust": False,
+        "current_week": {
+            "start": current_start.isoformat(),
+            "end": current_end.isoformat(),
+            "points": 2,
+        },
+        "previous_week": {
+            "start": previous_start.isoformat(),
+            "end": previous_end.isoformat(),
+            "points": 7,
+        },
+    }
+
+
+async def test_weekly_points_requires_sensor_read_permission(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_user: MockUser,
+    hass_read_only_access_token: str,
+) -> None:
+    """Test retained totals are hidden without points-sensor read access."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    hass_read_only_user.mock_policy({})
+
+    response = await _get_weekly_points(
+        hass, hass_ws_client, hass_read_only_access_token
+    )
+
+    assert not response["success"]
+    assert response["error"]["code"] == "unauthorized"
+
+
+async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_user: MockUser,
+    hass_read_only_access_token: str,
+) -> None:
+    """Test a non-admin with entity control can create an audited adjustment."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    hass_read_only_user.mock_policy({"entities": True})
+
+    totals_response = await _get_weekly_points(
+        hass, hass_ws_client, hass_read_only_access_token
+    )
+    assert totals_response["success"]
+    assert totals_response["result"]["can_adjust"] is True
+
+    response = await _adjust_weekly_points(
+        hass,
+        hass_ws_client,
+        {"child_id": "kid_1", "amount": 3, "reason": "Bonus"},
+        hass_read_only_access_token,
+    )
+
+    assert response["success"]
+    assert response["result"] == {
+        "child_id": "kid_1",
+        "points_entity_id": POINTS_SENSOR,
+        "adjustment_id": "adjustment_1",
+        "requested_amount": 3,
+        "applied_amount": 3,
+        "current_points": 3,
+    }
+    assert (
+        loaded_config_entry.runtime_data.data["adjustments"]["adjustment_1"]["reason"]
+        == "Bonus"
+    )
+
+
+async def test_adjust_weekly_points_rejects_read_only_user(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_access_token: str,
+) -> None:
+    """Test reading a points sensor does not grant adjustment access."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+
+    response = await _adjust_weekly_points(
+        hass,
+        hass_ws_client,
+        {"child_id": "kid_1", "amount": 1},
+        hass_read_only_access_token,
+    )
+
+    assert not response["success"]
+    assert response["error"]["code"] == "unauthorized"
+    assert loaded_config_entry.runtime_data.data["adjustments"] == {}
+
+
+async def test_adjust_weekly_points_reports_clamped_decrement(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test adjustment response reports the backend-applied delta and total."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "increment_weekly_counter",
+        {"child_id": "kid_1", "amount": 2},
+    )
+
+    response = await _adjust_weekly_points(
+        hass,
+        hass_ws_client,
+        {"child_id": "kid_1", "amount": -5},
+    )
+
+    assert response["success"]
+    assert response["result"]["adjustment_id"] == "adjustment_2"
+    assert response["result"]["requested_amount"] == -5
+    assert response["result"]["applied_amount"] == -2
+    assert response["result"]["current_points"] == 0
 
 
 async def test_inventory_returns_stored_structure_and_entity_registry_ids(
@@ -355,6 +552,58 @@ async def test_set_current_week_completion_is_idempotent_and_updates_points(
     assert switch_state is not None
     assert points_state.state == "0"
     assert switch_state.state == "off"
+
+
+async def test_correction_removal_keeps_weekly_points_at_zero(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test dated correction removal cannot expose a negative weekly total."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+    )
+    local_date = dt_util.now().date().isoformat()
+    await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": True,
+        },
+    )
+    await _call_action(
+        hass,
+        "decrement_weekly_counter",
+        {"child_id": "kid_1", "amount": 2},
+    )
+
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
+            "assignment_id": "assignment_1",
+            "local_date": local_date,
+            "completed": False,
+        },
+    )
+
+    assert response["success"]
+    points_state = hass.states.get(POINTS_SENSOR)
+    assert points_state is not None
+    assert points_state.state == "0"
+    assert [
+        adjustment["points"]
+        for adjustment in loaded_config_entry.runtime_data.data["adjustments"].values()
+    ] == [-2, 2]
 
 
 async def test_set_current_week_completion_allows_inactive_assignment_and_orphan_removal(

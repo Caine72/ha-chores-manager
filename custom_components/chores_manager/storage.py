@@ -11,9 +11,11 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     COMPLETION_MODE_INDEPENDENT,
+    DEFAULT_RESET_AFTER_WEEKDAY,
+    HISTORY_RETENTION_DAYS,
     STORAGE_KEY,
     STORAGE_VERSION,
-    WEEK_START_WEEKDAY,
+    WEEKDAY_NAMES,
 )
 from .exceptions import (
     CorrectionDateOutsideCurrentWeekError,
@@ -127,7 +129,11 @@ def create_empty_data() -> ChoresManagerData:
 class ChoresManagerStore:
     """Manage persistent Chores Manager data."""
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        reset_after_weekday: str = DEFAULT_RESET_AFTER_WEEKDAY,
+    ) -> None:
         """Initialize the store."""
         self._store: Store[ChoresManagerData] = Store(
             hass,
@@ -136,6 +142,11 @@ class ChoresManagerStore:
         )
         self._lock = asyncio.Lock()
         self._listeners: set[StoreListener] = set()
+        self._reset_after_weekday = (
+            reset_after_weekday
+            if reset_after_weekday in WEEKDAY_NAMES
+            else DEFAULT_RESET_AFTER_WEEKDAY
+        )
         self.data = create_empty_data()
 
     async def async_load(self) -> None:
@@ -177,15 +188,36 @@ class ChoresManagerStore:
 
     async def async_handle_local_midnight(self, now: datetime) -> None:
         """Refresh date-bound state and prune at the chore-week boundary."""
-        if now.date().weekday() == WEEK_START_WEEKDAY:
-            async with self._lock:
-                completions_pruned = self._prune_old_completions(now.date())
-                adjustments_pruned = self._prune_old_adjustments(now.date())
-                if completions_pruned or adjustments_pruned:
-                    await self.async_save()
-                    return
+        async with self._lock:
+            completions_pruned = self._prune_old_completions(now.date())
+            adjustments_pruned = self._prune_old_adjustments(now.date())
+            if completions_pruned or adjustments_pruned:
+                await self.async_save()
+                return
 
         self._async_notify_listeners()
+
+    async def async_set_reset_after_weekday(self, weekday: str) -> None:
+        """Apply a new reset weekday immediately using its latest occurrence."""
+        if weekday not in WEEKDAY_NAMES:
+            raise ValueError(f"Unsupported reset weekday: {weekday}")
+        if weekday == self._reset_after_weekday:
+            return
+
+        async with self._lock:
+            self._reset_after_weekday = weekday
+            completions_pruned = self._prune_old_completions(dt_util.now().date())
+            adjustments_pruned = self._prune_old_adjustments(dt_util.now().date())
+            if completions_pruned or adjustments_pruned:
+                await self.async_save()
+                return
+
+        self._async_notify_listeners()
+
+    @property
+    def reset_after_weekday(self) -> str:
+        """Return the weekday whose end closes the chore week."""
+        return self._reset_after_weekday
 
     def is_assignment_label_initialized(
         self,
@@ -635,26 +667,21 @@ class ChoresManagerStore:
             if child_id not in self.data["children"]:
                 raise UnknownChildError(child_id)
 
+            floor_changed = self._floor_current_week_points_at_zero(child_id)
             adjustment_points = amount
             if amount < 0:
                 current_points = self.get_current_week_points(child_id)
                 adjustment_points = -min(abs(amount), current_points)
                 if adjustment_points == 0:
+                    if floor_changed:
+                        await self.async_save()
                     return None
 
-            adjustment_number = self.data["next_adjustment_id"]
-            adjustment_id = f"adjustment_{adjustment_number}"
-            adjustment: AdjustmentData = {
-                "adjusted_at": dt_util.utcnow().isoformat(),
-                "local_date": dt_util.now().date().isoformat(),
-                "child_id": child_id,
-                "points": adjustment_points,
-            }
-            if reason:
-                adjustment["reason"] = reason
-
-            self.data["adjustments"][adjustment_id] = adjustment
-            self.data["next_adjustment_id"] = adjustment_number + 1
+            adjustment_id = self._store_adjustment(
+                child_id,
+                adjustment_points,
+                reason,
+            )
 
             await self.async_save()
 
@@ -724,8 +751,14 @@ class ChoresManagerStore:
                 if not completion_ids:
                     return None, False
 
+                child_ids = {
+                    self.data["completions"][completion_id]["child_id"]
+                    for completion_id in completion_ids
+                }
                 for completion_id in completion_ids:
                     del self.data["completions"][completion_id]
+                for child_id in child_ids:
+                    self._floor_current_week_points_at_zero(child_id)
 
                 await self.async_save()
                 return None, True
@@ -775,8 +808,14 @@ class ChoresManagerStore:
             if not completion_ids:
                 return False
 
+            child_ids = {
+                self.data["completions"][completion_id]["child_id"]
+                for completion_id in completion_ids
+            }
             for completion_id in completion_ids:
                 del self.data["completions"][completion_id]
+            for child_id in child_ids:
+                self._floor_current_week_points_at_zero(child_id)
 
             await self.async_save()
 
@@ -826,7 +865,9 @@ class ChoresManagerStore:
     ) -> tuple[date, date]:
         """Return the chore-week bounds containing a date."""
         current_date = reference_date or dt_util.now().date()
-        days_since_week_start = (current_date.weekday() - WEEK_START_WEEKDAY) % 7
+        reset_weekday = WEEKDAY_NAMES.index(self._reset_after_weekday)
+        week_start_weekday = (reset_weekday + 1) % 7
+        days_since_week_start = (current_date.weekday() - week_start_weekday) % 7
 
         week_start = current_date - timedelta(days=days_since_week_start)
         week_end = week_start + timedelta(days=6)
@@ -835,7 +876,15 @@ class ChoresManagerStore:
 
     def get_current_week_points(self, child_id: str) -> int:
         """Return the points earned by a child this chore week."""
-        week_start, week_end = self.get_current_week_bounds()
+        return self.get_week_points(child_id, dt_util.now().date())
+
+    def get_week_points(self, child_id: str, reference_date: date) -> int:
+        """Return points earned in the chore week containing a date."""
+        return max(0, self._get_week_points_unclamped(child_id, reference_date))
+
+    def _get_week_points_unclamped(self, child_id: str, reference_date: date) -> int:
+        """Return the raw completion and adjustment sum for a chore week."""
+        week_start, week_end = self.get_current_week_bounds(reference_date)
 
         completion_points = sum(
             completion["points"]
@@ -851,6 +900,42 @@ class ChoresManagerStore:
         )
 
         return completion_points + adjustment_points
+
+    def _floor_current_week_points_at_zero(self, child_id: str) -> bool:
+        """Store an audited offset when current-week points would be negative."""
+        current_date = dt_util.now().date()
+        raw_points = self._get_week_points_unclamped(child_id, current_date)
+        if raw_points >= 0:
+            return False
+
+        self._store_adjustment(
+            child_id,
+            -raw_points,
+            "Prevent weekly points below zero",
+        )
+        return True
+
+    def _store_adjustment(
+        self,
+        child_id: str,
+        points: int,
+        reason: str | None = None,
+    ) -> str:
+        """Store an adjustment while the caller holds the storage lock."""
+        adjustment_number = self.data["next_adjustment_id"]
+        adjustment_id = f"adjustment_{adjustment_number}"
+        adjustment: AdjustmentData = {
+            "adjusted_at": dt_util.utcnow().isoformat(),
+            "local_date": dt_util.now().date().isoformat(),
+            "child_id": child_id,
+            "points": points,
+        }
+        if reason:
+            adjustment["reason"] = reason
+
+        self.data["adjustments"][adjustment_id] = adjustment
+        self.data["next_adjustment_id"] = adjustment_number + 1
+        return adjustment_id
 
     def get_current_week_completions(self) -> list[tuple[str, CompletionData]]:
         """Return retained completion snapshots correctable during the current week."""
@@ -870,9 +955,8 @@ class ChoresManagerStore:
         )
 
     def _prune_old_completions(self, reference_date: date) -> bool:
-        """Remove completions older than the retained two chore weeks."""
-        current_week_start, _ = self.get_current_week_bounds(reference_date)
-        retention_start = current_week_start - timedelta(days=7)
+        """Keep a rolling window that supports any reset-weekday change."""
+        retention_start = reference_date - timedelta(days=HISTORY_RETENTION_DAYS - 1)
         completion_ids_to_remove = [
             completion_id
             for completion_id, completion in self.data["completions"].items()
@@ -885,9 +969,8 @@ class ChoresManagerStore:
         return bool(completion_ids_to_remove)
 
     def _prune_old_adjustments(self, reference_date: date) -> bool:
-        """Remove adjustments older than the retained two chore weeks."""
-        current_week_start, _ = self.get_current_week_bounds(reference_date)
-        retention_start = current_week_start - timedelta(days=7)
+        """Keep a rolling window that supports any reset-weekday change."""
+        retention_start = reference_date - timedelta(days=HISTORY_RETENTION_DAYS - 1)
         adjustment_ids_to_remove = [
             adjustment_id
             for adjustment_id, adjustment in self.data["adjustments"].items()

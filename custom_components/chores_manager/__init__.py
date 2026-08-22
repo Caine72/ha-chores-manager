@@ -7,7 +7,7 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
 from . import websocket_api
-from .const import PLATFORMS
+from .const import CONF_RESET_AFTER_WEEKDAY, DEFAULT_RESET_AFTER_WEEKDAY, PLATFORMS
 from .models import ChoresManagerConfigEntry
 from .services import async_setup_services
 from .storage import ChoresManagerStore
@@ -28,7 +28,13 @@ async def async_setup_entry(
     entry: ChoresManagerConfigEntry,
 ) -> bool:
     """Set up Chores Manager from a config entry."""
-    manager_store = ChoresManagerStore(hass)
+    manager_store = ChoresManagerStore(
+        hass,
+        entry.options.get(
+            CONF_RESET_AFTER_WEEKDAY,
+            DEFAULT_RESET_AFTER_WEEKDAY,
+        ),
+    )
     await manager_store.async_load()
 
     entry.runtime_data = manager_store

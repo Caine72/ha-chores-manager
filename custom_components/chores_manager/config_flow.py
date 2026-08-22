@@ -23,7 +23,9 @@ from .const import (
     ATTR_POINTS,
     ATTR_SORT_ORDER,
     ATTR_TITLE,
+    CONF_RESET_AFTER_WEEKDAY,
     DEFAULT_CHORE_ICON,
+    DEFAULT_RESET_AFTER_WEEKDAY,
     DOMAIN,
     NAME,
     SERVICE_ADD_CHILD,
@@ -38,10 +40,12 @@ from .const import (
     SERVICE_SET_CHORE_ACTIVE,
     SERVICE_UPDATE_CHILD,
     SERVICE_UPDATE_CHORE,
+    WEEKDAY_NAMES,
 )
 from .models import ChoresManagerConfigEntry
 
 ADVANCED_CHORE_OPTIONS = "advanced_chore_options"
+WEEKDAY_LABELS = {weekday: weekday.capitalize() for weekday in WEEKDAY_NAMES}
 
 
 class ChoresManagerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -329,7 +333,57 @@ class ChoresManagerOptionsFlow(OptionsFlow):
         """Show the management menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["children_menu", "chores_menu", "assignments_menu"],
+            menu_options=[
+                "week_settings",
+                "children_menu",
+                "chores_menu",
+                "assignments_menu",
+            ],
+        )
+
+    async def async_step_week_settings(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Configure the weekday whose end closes each chore week."""
+        entry = cast(ChoresManagerConfigEntry, self.config_entry)
+        if user_input is not None:
+            reset_after_weekday = user_input[CONF_RESET_AFTER_WEEKDAY]
+            await self._store.async_set_reset_after_weekday(reset_after_weekday)
+            self.hass.config_entries.async_update_entry(
+                entry,
+                options={
+                    **entry.options,
+                    CONF_RESET_AFTER_WEEKDAY: reset_after_weekday,
+                },
+            )
+            return await self.async_step_init()
+
+        current_weekday = entry.options.get(
+            CONF_RESET_AFTER_WEEKDAY,
+            DEFAULT_RESET_AFTER_WEEKDAY,
+        )
+        return self.async_show_form(
+            step_id="week_settings",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_RESET_AFTER_WEEKDAY,
+                        default=current_weekday,
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(
+                                    value=weekday,
+                                    label=WEEKDAY_LABELS[weekday],
+                                )
+                                for weekday in WEEKDAY_NAMES
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
         )
 
     async def async_step_children_menu(

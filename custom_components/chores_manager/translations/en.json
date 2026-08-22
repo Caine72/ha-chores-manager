@@ -319,11 +319,20 @@
     "step": {
       "init": {
         "menu_options": {
+          "week_settings": "Week settings",
           "children_menu": "Children",
           "chores_menu": "Chores",
           "assignments_menu": "Assignments"
         },
         "title": "Manage Chores Manager"
+      },
+      "week_settings": {
+        "data": {
+          "reset_after_weekday": "Reset after"
+        },
+        "description": "The selected day closes the chore week. The new boundary applies immediately using the most recent occurrence of that day. Reset after Friday preserves a Saturday-Friday week.",
+        "title": "Week settings",
+        "submit": "Save"
       },
       "children_menu": {
         "menu_options": {

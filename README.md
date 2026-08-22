@@ -11,7 +11,7 @@ Standalone Lovelace cards created for it [Chores Manager Cards](https://github.c
 >
 > It is also vibe coded with AI assistance. The code is intended to be practical, understandable, and reliable for my household workflow rather than polished as a broadly maintained open-source project.
 
-Version `0.4.0` adds frontend-callable weekly-counter adjustments. Weekly total sensors are unitless numeric states so cards own display wording such as `points`; adjustments remain auditable records rather than rewritten completion history.
+Version `0.5.0` adds entity-authorized current/previous weekly-points reads and audited card adjustments. Weekly total sensors remain unitless numeric states so cards own display wording such as `points`; adjustments remain audit records rather than rewritten completion history.
 
 ## What it does
 
@@ -23,7 +23,7 @@ Chores Manager stores children, chores, assignments, and daily completion snapsh
 - Home Assistant actions for creating, editing, activating, deactivating, and deleting children, chores, and assignments;
 - stable IDs so renaming a child or chore does not break entity identity or history.
 
-The chore week runs Saturday through Friday using Home Assistant local time. Completion history is retained for the current chore week and the previous complete chore week.
+The chore week uses Home Assistant local time and resets after a configurable weekday. Friday is the default, preserving the original Saturday-through-Friday week. Completion history supports the current chore week and the previous complete chore week.
 
 ## Current scope
 
@@ -83,7 +83,7 @@ Entity IDs and unique IDs are derived from stable integration IDs, not display n
 
 ## Native Management
 
-For occasional household administration, open **Settings -> Devices & services -> Chores Manager -> Configure**. The native options flow can create, edit, activate, deactivate, and delete children and chores. It can assign or remove multiple chores for one child, and manage individual active or inactive assignments. It shows active and inactive records and asks for confirmation before removal or deletion; deleting structure removes related live entities while retaining completion history.
+For occasional household administration, open **Settings -> Devices & services -> Chores Manager -> Configure**. Week settings select the weekday after which a new chore week begins. A changed weekday applies immediately using the selected day's most recent occurrence; for example, changing to reset after Thursday on Saturday starts the current week on the Friday just passed. The same options flow can create, edit, activate, deactivate, and delete children and chores. It can assign or remove multiple chores for one child, and manage individual active or inactive assignments. It shows active and inactive records and asks for confirmation before removal or deletion; deleting structure removes related live entities while retaining completion history.
 
 ## Actions
 
@@ -109,13 +109,17 @@ Actions are available under the `chores_manager` domain.
 
 Validation trims text input, rejects blank stable IDs, limits names/titles/categories to 100 characters, limits points to 1-100, requires non-negative `sort_order`, and validates icons with Home Assistant's icon selector rules.
 
+User-originated weekly-counter action calls require Home Assistant `control`
+permission for the child's weekly-points sensor. Calls without a user context, such as
+trusted internal automations, remain supported.
+
 ## Completion And Retention
 
 Turning an assignment switch on completes that assignment for the current local date. Turning it off removes that assignment's completion for the current local date.
 
 Completion records are immutable snapshots. They store the child name, chore title, category, and points as they existed when the completion was created. Later metadata edits do not rewrite historical completions.
 
-The chore week runs Saturday through Friday using Home Assistant's local time. Weekly points sensors total current-week completions and manual adjustments. Adjustments record their local date, timestamp, child, point delta, and optional reason; a decrement stores only the amount that can be subtracted from the current total, and is a no-op at zero. Storage retention keeps the current chore week and the previous complete chore week; older completions and adjustments are pruned on load and at local midnight when a new chore week starts.
+The chore week resets after the configured weekday using Home Assistant's local time. Friday is the default. Weekly points sensors total current-week completions and manual adjustments. Adjustments record their local date, timestamp, child, point delta, and optional reason; a decrement stores only the amount that can be subtracted from the current total, and is a no-op at zero. Storage retains a rolling 14-day buffer and prunes older completions and adjustments on load and at local midnight. That buffer is sufficient to calculate the current and previous complete chore weeks after any weekday change; data already pruned before upgrading cannot be restored.
 
 ## Activation And Deletion
 
@@ -127,7 +131,7 @@ Stable ID counters are monotonic. Deleted IDs are not reused.
 
 ## Storage Compatibility
 
-The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Version `0.4.0` preserves storage version `1`; upgrading from `0.1.0`, `0.2.0`, or `0.3.0` requires no storage migration. Existing data gains empty adjustment storage on load.
+The integration uses Home Assistant storage key `chores_manager.data` at storage version `1`. Version `0.5.0` preserves storage version `1`; upgrading from `0.1.0`, `0.2.0`, `0.3.0`, or `0.4.0` requires no storage migration. Existing pre-`0.4.0` data gains empty adjustment storage on load.
 
 Storage and stable IDs are the source of truth. Labels are initialized for assignment switches as a secondary Home Assistant organization boundary and are not the primary integration contract.
 
@@ -137,11 +141,25 @@ Chores Manager exposes an admin-only Home Assistant WebSocket command, `chores_m
 
 See `docs/INVENTORY_CONTRACT.md` for the full response contract.
 
+## Weekly Points API
+
+The entity-authorized WebSocket commands `chores_manager/weekly_points` and
+`chores_manager/adjust_weekly_points` support parent-facing cards without granting
+structural administration. The read command returns current and previous complete
+chore-week totals and requires `read` permission for the child's weekly-points sensor.
+The response also reports whether the caller may adjust that total.
+The mutation command creates an audited current-week adjustment and requires `control`
+permission for that sensor. Its response includes the applied delta and
+backend-confirmed total.
+
+See `docs/WEEKLY_POINTS_CONTRACT.md` for request, response, authorization, and audit
+details.
+
 ## Admin Correction API
 
 For a separate admin card that corrects the current week's history, Chores Manager exposes two admin-only WebSocket commands:
 
-- `chores_manager/current_week_completions` returns completion snapshots from the current Saturday-Friday week through today;
+- `chores_manager/current_week_completions` returns completion snapshots from the backend-calculated current chore week through today;
 - `chores_manager/set_current_week_completion` idempotently sets one assignment's completion state for a valid date in that window.
 
 The correction API supports inactive existing assignments and removal of history after an assignment is deleted. It rejects future dates, retained previous-week dates, and new completions for deleted assignments. See `docs/CORRECTION_HISTORY_CONTRACT.md` for the full contract.

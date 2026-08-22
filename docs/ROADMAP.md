@@ -28,8 +28,8 @@ The source code and automated tests are authoritative if this document becomes s
 - Child, chore, and assignment creation
 - Independent completion and undo behavior
 - Immutable completion snapshots
-- Saturday-Friday chore week
-- Current and previous complete week retained
+- Configurable reset-after weekday, defaulting to a Saturday-Friday chore week
+- Rolling 14-day history buffer supporting current and previous complete week totals
 - Local-midnight state refresh
 - Child, chore, and assignment activation lifecycles
 - Explicit child, chore, and assignment delete actions with completion-snapshot preservation
@@ -143,7 +143,7 @@ A likely desktop presentation is a chore-by-child matrix or compact table. Mobil
 
 ## Completed milestone: current-week correction history
 
-The separate admin card needs supported access to completion history for correcting the current chore week. The integration must expose an admin-only read model for completion snapshots from the current Saturday-Friday week through today, while keeping the retained previous week read-only. It must use stable IDs and include orphan history whose assignment was later deleted. This contract is separate from structural inventory and introduces no card code or mutation in its first milestone.
+The separate admin card needs supported access to completion history for correcting the current chore week. The integration must expose an admin-only read model for completion snapshots from the backend-calculated current week through today, while keeping the retained previous week read-only. It must use stable IDs and include orphan history whose assignment was later deleted. This contract is separate from structural inventory and introduces no card code or mutation in its first milestone.
 
 ## Completed milestone: current-week completion correction
 
@@ -162,7 +162,7 @@ The generated acceptance JSON and HTML reports are local artifacts and are not c
 
 ## Completed milestone: backend v0.4 weekly counter adjustments
 
-The `0.4.0` backend release makes weekly totals suitable for cards that own their own wording and adds auditable manual adjustments. Weekly sensors now expose a unitless numeric state, while `increment_weekly_counter` and `decrement_weekly_counter` adjust the current chore week by `1-100` points. Decrements clamp at zero, and adjustments use the same current-plus-previous-week retention policy as completion snapshots.
+The `0.4.0` backend release makes weekly totals suitable for cards that own their own wording and adds auditable manual adjustments. Weekly sensors now expose a unitless numeric state, while `increment_weekly_counter` and `decrement_weekly_counter` adjust the current chore week by `1-100` points. Decrements clamp at zero, and adjustments use the same retention policy as completion snapshots.
 
 Release-candidate validation completed on 2026-07-13:
 
@@ -172,6 +172,24 @@ Release-candidate validation completed on 2026-07-13:
 - `./scripts/run-real-ha-acceptance`
 
 The generated acceptance JSON and HTML reports are local artifacts and are not committed.
+
+## Completed milestone: backend v0.5 entity-authorized weekly-points card API
+
+Card implementation identified two missing backend boundaries: no supported read for
+the retained previous-week total, and adjustment actions whose child-only payload could
+not use Home Assistant's normal target authorization. The new weekly-points WebSocket
+contract resolves the child to its weekly-points sensor, requires entity `read` access
+for totals and entity `control` access for adjustments, and returns the confirmed total
+after an audited mutation. Existing adjustment actions apply the same control check to
+user-originated calls while keeping trusted internal automations compatible.
+
+Release-candidate validation completed on 2026-08-18:
+
+- `./scripts/validate` (`105 passed`)
+- `git diff --check`
+- live Home Assistant current/previous totals read
+- live reversible audited adjustments through both the WebSocket API and overview card
+- desktop and mobile overview-card acceptance
 
 ## Integration-aware custom card
 

@@ -168,23 +168,52 @@ async def test_saturday_rollover_starts_new_week_and_retains_previous_completion
         assert store.data["completions"]["completion_1"]["local_date"] == ("2026-07-10")
 
 
-async def test_saturday_pruning_keeps_current_and_previous_chore_weeks(
+async def test_configured_thursday_reset_rolls_over_on_friday(
     hass: HomeAssistant,
     config_entry: MockConfigEntry,
 ) -> None:
-    """Test Saturday pruning retains exactly the current and previous weeks."""
+    """Test reset after Thursday makes Friday the first day of the week."""
+    hass.config_entries.async_update_entry(
+        config_entry,
+        options={"reset_after_weekday": "thursday"},
+    )
+    with freeze_time("2026-07-09 23:59:00+00:00"):
+        await _setup_entry(hass, config_entry)
+        await _create_assignment(hass)
+        await _call_switch_action(hass, "turn_on")
+
+        points_state = _state(hass, WEEKLY_POINTS_SENSOR)
+        assert points_state.state == "2"
+        assert points_state.attributes["week_start"] == "2026-07-03"
+        assert points_state.attributes["week_end"] == "2026-07-09"
+
+    with freeze_time("2026-07-10 00:00:00+00:00"):
+        await _fire_registered_midnight(hass)
+
+        points_state = _state(hass, WEEKLY_POINTS_SENSOR)
+        assert points_state.state == "0"
+        assert points_state.attributes["week_start"] == "2026-07-10"
+        assert points_state.attributes["week_end"] == "2026-07-16"
+
+
+async def test_midnight_pruning_keeps_reset_change_completion_buffer(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+) -> None:
+    """Test pruning retains 14 days so reset weekday can change safely."""
     with freeze_time("2026-07-17 23:59:00+00:00"):
         await _setup_entry(hass, config_entry)
         await _create_assignment(hass)
 
         store = config_entry.runtime_data
         store.data["completions"] = {
-            "completion_1": _completion("2026-07-10"),
-            "completion_2": _completion("2026-07-11"),
-            "completion_3": _completion("2026-07-17"),
-            "completion_4": _completion("2026-07-18"),
+            "completion_1": _completion("2026-07-04"),
+            "completion_2": _completion("2026-07-10"),
+            "completion_3": _completion("2026-07-11"),
+            "completion_4": _completion("2026-07-17"),
+            "completion_5": _completion("2026-07-18"),
         }
-        store.data["next_completion_id"] = 5
+        store.data["next_completion_id"] = 6
         await store.async_save()
         await hass.async_block_till_done()
 
@@ -195,8 +224,9 @@ async def test_saturday_pruning_keeps_current_and_previous_chore_weeks(
             "completion_2",
             "completion_3",
             "completion_4",
+            "completion_5",
         ]
-        assert store.data["next_completion_id"] == 5
+        assert store.data["next_completion_id"] == 6
         assert _state(hass, CHORE_SWITCH).state == "on"
         assert _state(hass, WEEKLY_POINTS_SENSOR).state == "2"
 
@@ -211,11 +241,12 @@ async def test_loading_store_prunes_completions_outside_retention(
 
         store = loaded_config_entry.runtime_data
         store.data["completions"] = {
-            "completion_1": _completion("2026-07-10"),
-            "completion_2": _completion("2026-07-11"),
-            "completion_3": _completion("2026-07-18"),
+            "completion_1": _completion("2026-07-04"),
+            "completion_2": _completion("2026-07-10"),
+            "completion_3": _completion("2026-07-11"),
+            "completion_4": _completion("2026-07-18"),
         }
-        store.data["next_completion_id"] = 4
+        store.data["next_completion_id"] = 5
         await store.async_save()
         await hass.async_block_till_done()
 
@@ -228,8 +259,9 @@ async def test_loading_store_prunes_completions_outside_retention(
         assert list(reloaded_store.data["completions"]) == [
             "completion_2",
             "completion_3",
+            "completion_4",
         ]
-        assert reloaded_store.data["next_completion_id"] == 4
+        assert reloaded_store.data["next_completion_id"] == 5
         assert _state(hass, CHORE_SWITCH).state == "on"
         assert _state(hass, WEEKLY_POINTS_SENSOR).state == "2"
 
@@ -259,23 +291,24 @@ async def test_saturday_rollover_excludes_previous_week_adjustments(
         assert points_state.attributes["week_end"] == "2026-07-17"
 
 
-async def test_saturday_pruning_keeps_current_and_previous_adjustment_weeks(
+async def test_midnight_pruning_keeps_reset_change_adjustment_buffer(
     hass: HomeAssistant,
     config_entry: MockConfigEntry,
 ) -> None:
-    """Test Saturday pruning retains adjustment history for two chore weeks."""
+    """Test adjustment pruning retains 14 days for weekday changes."""
     with freeze_time("2026-07-17 23:59:00+00:00"):
         await _setup_entry(hass, config_entry)
         await _call_action(hass, "add_child", {"name": "Alex"})
 
         store = config_entry.runtime_data
         store.data["adjustments"] = {
-            "adjustment_1": _adjustment("2026-07-10", 1),
-            "adjustment_2": _adjustment("2026-07-11", 2),
-            "adjustment_3": _adjustment("2026-07-17", 3),
-            "adjustment_4": _adjustment("2026-07-18", 4),
+            "adjustment_1": _adjustment("2026-07-04", 1),
+            "adjustment_2": _adjustment("2026-07-10", 2),
+            "adjustment_3": _adjustment("2026-07-11", 3),
+            "adjustment_4": _adjustment("2026-07-17", 4),
+            "adjustment_5": _adjustment("2026-07-18", 5),
         }
-        store.data["next_adjustment_id"] = 5
+        store.data["next_adjustment_id"] = 6
         await store.async_save()
         await hass.async_block_till_done()
 
@@ -286,9 +319,10 @@ async def test_saturday_pruning_keeps_current_and_previous_adjustment_weeks(
             "adjustment_2",
             "adjustment_3",
             "adjustment_4",
+            "adjustment_5",
         ]
-        assert store.data["next_adjustment_id"] == 5
-        assert _state(hass, WEEKLY_POINTS_SENSOR).state == "4"
+        assert store.data["next_adjustment_id"] == 6
+        assert _state(hass, WEEKLY_POINTS_SENSOR).state == "5"
 
 
 async def test_loading_store_prunes_adjustments_outside_retention(
@@ -301,11 +335,12 @@ async def test_loading_store_prunes_adjustments_outside_retention(
 
         store = loaded_config_entry.runtime_data
         store.data["adjustments"] = {
-            "adjustment_1": _adjustment("2026-07-10", 1),
-            "adjustment_2": _adjustment("2026-07-11", 2),
-            "adjustment_3": _adjustment("2026-07-18", 3),
+            "adjustment_1": _adjustment("2026-07-04", 1),
+            "adjustment_2": _adjustment("2026-07-10", 2),
+            "adjustment_3": _adjustment("2026-07-11", 3),
+            "adjustment_4": _adjustment("2026-07-18", 4),
         }
-        store.data["next_adjustment_id"] = 4
+        store.data["next_adjustment_id"] = 5
         await store.async_save()
         await hass.async_block_till_done()
 
@@ -318,6 +353,7 @@ async def test_loading_store_prunes_adjustments_outside_retention(
         assert list(reloaded_store.data["adjustments"]) == [
             "adjustment_2",
             "adjustment_3",
+            "adjustment_4",
         ]
-        assert reloaded_store.data["next_adjustment_id"] == 4
-        assert _state(hass, WEEKLY_POINTS_SENSOR).state == "3"
+        assert reloaded_store.data["next_adjustment_id"] == 5
+        assert _state(hass, WEEKLY_POINTS_SENSOR).state == "4"

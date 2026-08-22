@@ -65,5 +65,7 @@ The command is admin-only. If Chores Manager does not have exactly one loaded co
 - `points_entity_id` or `switch_entity_id` is `null` when no registry entry exists.
 - `switch_expected` is `true` only when the assignment, child, and chore are all active.
 - Completion history is not exposed by this contract.
+- Week boundaries are backend-owned and reflect the configured reset-after weekday;
+  consumers must not calculate a fixed weekday boundary.
 - Mutations remain in existing Home Assistant actions.
 - Consumers should refresh inventory after mutations; this contract does not provide a subscription.

@@ -6,11 +6,15 @@ The correction history contract supports an out-of-repository admin card that co
 
 The backend calculates the correction window using Home Assistant local time:
 
-- start: the current Saturday-Friday chore week's Saturday;
+- start: the first day of the current configured chore week;
 - end: today;
 - excluded: future dates and every date in the retained previous week.
 
-The backend, rather than the card, owns this validation.
+The configured option means "reset after" the selected weekday. Friday is the default,
+which produces a Saturday-through-Friday week. A change applies immediately using the
+selected weekday's most recent occurrence, so selecting Thursday on a Saturday makes
+the Friday just passed the current week start. The backend, rather than the card, owns
+these boundaries and validation.
 
 ## Read transport
 
