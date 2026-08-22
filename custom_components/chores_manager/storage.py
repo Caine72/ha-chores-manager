@@ -11,9 +11,11 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     COMPLETION_MODE_INDEPENDENT,
+    DEFAULT_RESET_AFTER_WEEKDAY,
+    HISTORY_RETENTION_DAYS,
     STORAGE_KEY,
     STORAGE_VERSION,
-    WEEK_START_WEEKDAY,
+    WEEKDAY_NAMES,
 )
 from .exceptions import (
     CorrectionDateOutsideCurrentWeekError,
@@ -127,7 +129,11 @@ def create_empty_data() -> ChoresManagerData:
 class ChoresManagerStore:
     """Manage persistent Chores Manager data."""
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        reset_after_weekday: str = DEFAULT_RESET_AFTER_WEEKDAY,
+    ) -> None:
         """Initialize the store."""
         self._store: Store[ChoresManagerData] = Store(
             hass,
@@ -136,6 +142,11 @@ class ChoresManagerStore:
         )
         self._lock = asyncio.Lock()
         self._listeners: set[StoreListener] = set()
+        self._reset_after_weekday = (
+            reset_after_weekday
+            if reset_after_weekday in WEEKDAY_NAMES
+            else DEFAULT_RESET_AFTER_WEEKDAY
+        )
         self.data = create_empty_data()
 
     async def async_load(self) -> None:
@@ -177,15 +188,36 @@ class ChoresManagerStore:
 
     async def async_handle_local_midnight(self, now: datetime) -> None:
         """Refresh date-bound state and prune at the chore-week boundary."""
-        if now.date().weekday() == WEEK_START_WEEKDAY:
-            async with self._lock:
-                completions_pruned = self._prune_old_completions(now.date())
-                adjustments_pruned = self._prune_old_adjustments(now.date())
-                if completions_pruned or adjustments_pruned:
-                    await self.async_save()
-                    return
+        async with self._lock:
+            completions_pruned = self._prune_old_completions(now.date())
+            adjustments_pruned = self._prune_old_adjustments(now.date())
+            if completions_pruned or adjustments_pruned:
+                await self.async_save()
+                return
 
         self._async_notify_listeners()
+
+    async def async_set_reset_after_weekday(self, weekday: str) -> None:
+        """Apply a new reset weekday immediately using its latest occurrence."""
+        if weekday not in WEEKDAY_NAMES:
+            raise ValueError(f"Unsupported reset weekday: {weekday}")
+        if weekday == self._reset_after_weekday:
+            return
+
+        async with self._lock:
+            self._reset_after_weekday = weekday
+            completions_pruned = self._prune_old_completions(dt_util.now().date())
+            adjustments_pruned = self._prune_old_adjustments(dt_util.now().date())
+            if completions_pruned or adjustments_pruned:
+                await self.async_save()
+                return
+
+        self._async_notify_listeners()
+
+    @property
+    def reset_after_weekday(self) -> str:
+        """Return the weekday whose end closes the chore week."""
+        return self._reset_after_weekday
 
     def is_assignment_label_initialized(
         self,
@@ -833,7 +865,9 @@ class ChoresManagerStore:
     ) -> tuple[date, date]:
         """Return the chore-week bounds containing a date."""
         current_date = reference_date or dt_util.now().date()
-        days_since_week_start = (current_date.weekday() - WEEK_START_WEEKDAY) % 7
+        reset_weekday = WEEKDAY_NAMES.index(self._reset_after_weekday)
+        week_start_weekday = (reset_weekday + 1) % 7
+        days_since_week_start = (current_date.weekday() - week_start_weekday) % 7
 
         week_start = current_date - timedelta(days=days_since_week_start)
         week_end = week_start + timedelta(days=6)
@@ -921,9 +955,8 @@ class ChoresManagerStore:
         )
 
     def _prune_old_completions(self, reference_date: date) -> bool:
-        """Remove completions older than the retained two chore weeks."""
-        current_week_start, _ = self.get_current_week_bounds(reference_date)
-        retention_start = current_week_start - timedelta(days=7)
+        """Keep a rolling window that supports any reset-weekday change."""
+        retention_start = reference_date - timedelta(days=HISTORY_RETENTION_DAYS - 1)
         completion_ids_to_remove = [
             completion_id
             for completion_id, completion in self.data["completions"].items()
@@ -936,9 +969,8 @@ class ChoresManagerStore:
         return bool(completion_ids_to_remove)
 
     def _prune_old_adjustments(self, reference_date: date) -> bool:
-        """Remove adjustments older than the retained two chore weeks."""
-        current_week_start, _ = self.get_current_week_bounds(reference_date)
-        retention_start = current_week_start - timedelta(days=7)
+        """Keep a rolling window that supports any reset-weekday change."""
+        retention_start = reference_date - timedelta(days=HISTORY_RETENTION_DAYS - 1)
         adjustment_ids_to_remove = [
             adjustment_id
             for adjustment_id, adjustment in self.data["adjustments"].items()

@@ -1,5 +1,7 @@
 """Test Chores Manager native management options flow."""
 
+from datetime import date
+
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -20,6 +22,53 @@ async def _select_menu_option(
         flow_id,
         user_input={"next_step_id": next_step_id},
     )
+
+
+async def test_options_flow_changes_week_boundary_immediately(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test reset-after Thursday immediately selects the Thursday just passed."""
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    assert result["menu_options"] == [
+        "week_settings",
+        "children_menu",
+        "chores_menu",
+        "assignments_menu",
+    ]
+
+    result = await _select_menu_option(hass, result["flow_id"], "week_settings")
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "week_settings"
+    weekday_key = next(
+        key
+        for key in result["data_schema"].schema
+        if key.schema == "reset_after_weekday"
+    )
+    assert weekday_key.default() == "friday"
+    weekday_selector = result["data_schema"].schema[weekday_key]
+    assert weekday_selector.config["options"] == [
+        {"value": "monday", "label": "Monday"},
+        {"value": "tuesday", "label": "Tuesday"},
+        {"value": "wednesday", "label": "Wednesday"},
+        {"value": "thursday", "label": "Thursday"},
+        {"value": "friday", "label": "Friday"},
+        {"value": "saturday", "label": "Saturday"},
+        {"value": "sunday", "label": "Sunday"},
+    ]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"reset_after_weekday": "thursday"},
+    )
+
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "init"
+    assert loaded_config_entry.options["reset_after_weekday"] == "thursday"
+    assert loaded_config_entry.runtime_data.reset_after_weekday == "thursday"
+    assert loaded_config_entry.runtime_data.get_current_week_bounds(
+        date(2026, 8, 22)
+    ) == (date(2026, 8, 21), date(2026, 8, 27))
 
 
 async def test_options_flow_manages_child_lifecycle(

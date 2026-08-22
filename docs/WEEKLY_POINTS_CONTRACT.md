@@ -25,8 +25,10 @@ sensor. The response contains:
 }
 ```
 
-The previous interval is the complete Saturday-through-Friday chore week immediately
-before the current week. Totals include completion snapshots and audited adjustments.
+The previous interval is the complete configured chore week immediately before the
+current week. The backend calculates both intervals from the configured reset-after
+weekday; consumers must use the returned dates rather than calculating weekdays.
+Totals include completion snapshots and audited adjustments.
 `can_adjust` reports whether this caller has `control` permission for the resolved
 weekly-points sensor, allowing cards to omit the adjustment workflow without inferring
 authorization from administrator status or frontend visibility rules.

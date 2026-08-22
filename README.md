@@ -23,7 +23,7 @@ Chores Manager stores children, chores, assignments, and daily completion snapsh
 - Home Assistant actions for creating, editing, activating, deactivating, and deleting children, chores, and assignments;
 - stable IDs so renaming a child or chore does not break entity identity or history.
 
-The chore week runs Saturday through Friday using Home Assistant local time. Completion history is retained for the current chore week and the previous complete chore week.
+The chore week uses Home Assistant local time and resets after a configurable weekday. Friday is the default, preserving the original Saturday-through-Friday week. Completion history supports the current chore week and the previous complete chore week.
 
 ## Current scope
 
@@ -83,7 +83,7 @@ Entity IDs and unique IDs are derived from stable integration IDs, not display n
 
 ## Native Management
 
-For occasional household administration, open **Settings -> Devices & services -> Chores Manager -> Configure**. The native options flow can create, edit, activate, deactivate, and delete children and chores. It can assign or remove multiple chores for one child, and manage individual active or inactive assignments. It shows active and inactive records and asks for confirmation before removal or deletion; deleting structure removes related live entities while retaining completion history.
+For occasional household administration, open **Settings -> Devices & services -> Chores Manager -> Configure**. Week settings select the weekday after which a new chore week begins. A changed weekday applies immediately using the selected day's most recent occurrence; for example, changing to reset after Thursday on Saturday starts the current week on the Friday just passed. The same options flow can create, edit, activate, deactivate, and delete children and chores. It can assign or remove multiple chores for one child, and manage individual active or inactive assignments. It shows active and inactive records and asks for confirmation before removal or deletion; deleting structure removes related live entities while retaining completion history.
 
 ## Actions
 
@@ -119,7 +119,7 @@ Turning an assignment switch on completes that assignment for the current local 
 
 Completion records are immutable snapshots. They store the child name, chore title, category, and points as they existed when the completion was created. Later metadata edits do not rewrite historical completions.
 
-The chore week runs Saturday through Friday using Home Assistant's local time. Weekly points sensors total current-week completions and manual adjustments. Adjustments record their local date, timestamp, child, point delta, and optional reason; a decrement stores only the amount that can be subtracted from the current total, and is a no-op at zero. Storage retention keeps the current chore week and the previous complete chore week; older completions and adjustments are pruned on load and at local midnight when a new chore week starts.
+The chore week resets after the configured weekday using Home Assistant's local time. Friday is the default. Weekly points sensors total current-week completions and manual adjustments. Adjustments record their local date, timestamp, child, point delta, and optional reason; a decrement stores only the amount that can be subtracted from the current total, and is a no-op at zero. Storage retains a rolling 14-day buffer and prunes older completions and adjustments on load and at local midnight. That buffer is sufficient to calculate the current and previous complete chore weeks after any weekday change; data already pruned before upgrading cannot be restored.
 
 ## Activation And Deletion
 
@@ -159,7 +159,7 @@ details.
 
 For a separate admin card that corrects the current week's history, Chores Manager exposes two admin-only WebSocket commands:
 
-- `chores_manager/current_week_completions` returns completion snapshots from the current Saturday-Friday week through today;
+- `chores_manager/current_week_completions` returns completion snapshots from the backend-calculated current chore week through today;
 - `chores_manager/set_current_week_completion` idempotently sets one assignment's completion state for a valid date in that window.
 
 The correction API supports inactive existing assignments and removal of history after an assignment is deleted. It rejects future dates, retained previous-week dates, and new completions for deleted assignments. See `docs/CORRECTION_HISTORY_CONTRACT.md` for the full contract.
