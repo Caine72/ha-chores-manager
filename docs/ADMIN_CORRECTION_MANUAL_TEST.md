@@ -9,7 +9,7 @@ Use this after the backend release candidate is installed in Home Assistant. The
 5. Confirm the current-day assignment switch and weekly-points sensor update when the selected date is today.
 6. Repeat the same completed request and confirm it is a no-op with `changed: false`.
 7. Call the correction command with `completed: false`, then confirm the history row is gone and today's live state updates when applicable.
-8. Verify a future date and a date before the current Saturday return an error.
+8. Verify a future date and a date before the returned window start return an error.
 9. Delete an assignment that has a current-week completion, then remove that completion with the same assignment ID and date. Confirm a new completion cannot be added for the deleted assignment.
 10. Verify a non-admin WebSocket token is rejected.
 

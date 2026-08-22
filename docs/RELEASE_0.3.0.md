@@ -2,7 +2,7 @@
 
 ## Summary
 
-Chores Manager `0.3.0` finalizes the backend contract needed by the future out-of-repository card. It adds admin-only current-week completion history and correction APIs while keeping the custom card outside this repository.
+Chores Manager `0.3.0` introduced the backend contract now used by the administrator correction card in the separate Chores Manager Cards repository. It adds admin-only current-week completion history and correction APIs while keeping card code outside this repository.
 
 ## Added
 
@@ -15,7 +15,7 @@ Chores Manager `0.3.0` finalizes the backend contract needed by the future out-o
 
 - Storage version remains `1`.
 - Upgrading from `0.1.0` or `0.2.0` requires no storage migration.
-- Historical correction remains limited to the current Saturday-Friday chore week through today.
+- Historical correction remains limited to the backend-calculated current chore week through today.
 
 ## Validation
 

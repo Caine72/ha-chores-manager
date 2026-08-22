@@ -1,6 +1,6 @@
 # Chores Manager correction history contract
 
-The correction history contract supports an out-of-repository admin card that corrects the current week's completion history. It does not source, depend on, or package any card implementation.
+The correction history contract supports the administrator card in the separate Chores Manager Cards repository. This backend does not source, depend on, or package that card.
 
 ## Current-week boundary
 
@@ -43,7 +43,7 @@ The response contains the correction window and completion snapshots whose local
       "chore_id": "chore_1",
       "local_date": "2026-07-12",
       "completed_at": "2026-07-12T12:00:00+00:00",
-      "child_name": "Alex",
+      "child_name": "Avery",
       "chore_title": "Make the bed",
       "category": "Morning",
       "points": 2

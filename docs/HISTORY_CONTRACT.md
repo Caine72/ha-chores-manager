@@ -21,8 +21,8 @@ names are not authorization boundaries.
 ```json
 {
   "child_id": "kid_1",
-  "child_name": "Alex",
-  "person_entity_id": "person.alex",
+  "child_name": "Avery",
+  "person_entity_id": "person.avery",
   "points_entity_id": "sensor.kid_1_weekly_points",
   "window": {"start": "2026-08-21", "end": "2026-08-22"},
   "completions": [
@@ -34,7 +34,7 @@ names are not authorization boundaries.
       "chore_id": "chore_1",
       "local_date": "2026-08-22",
       "completed_at": "2026-08-22T08:00:00+00:00",
-      "child_name": "Alex",
+      "child_name": "Avery",
       "chore_title": "Feed the cat",
       "category": "Cat",
       "points": 1
