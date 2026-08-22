@@ -17,7 +17,8 @@ sensor. The response contains:
 ```json
 {
   "child_id": "kid_1",
-  "child_name": "Alex",
+  "child_name": "Avery",
+  "person_entity_id": "person.avery",
   "points_entity_id": "sensor.kid_1_weekly_points",
   "can_adjust": true,
   "current_week": {"start": "2026-08-15", "end": "2026-08-21", "points": 5},
@@ -32,6 +33,8 @@ Totals include completion snapshots and audited adjustments.
 `can_adjust` reports whether this caller has `control` permission for the resolved
 weekly-points sensor, allowing cards to omit the adjustment workflow without inferring
 authorization from administrator status or frontend visibility rules.
+
+`person_entity_id` is omitted when no Person is associated with the child. It is an optional portrait hint only and does not affect entity permissions.
 
 ## Adjust the current total
 

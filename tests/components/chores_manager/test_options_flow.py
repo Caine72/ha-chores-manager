@@ -93,16 +93,21 @@ async def test_options_flow_manages_child_lifecycle(
     result = await _select_menu_option(hass, result["flow_id"], "add_child")
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "add_child"
+    person_key = next(
+        key for key in result["data_schema"].schema if key.schema == "person_entity_id"
+    )
+    assert result["data_schema"].schema[person_key].config["domain"] == ["person"]
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={"name": "Alex"},
+        user_input={"name": "Alex", "person_entity_id": "person.alex"},
     )
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "children_menu"
     assert loaded_config_entry.runtime_data.data["children"]["kid_1"] == {
         "name": "Alex",
         "active": True,
+        "person_entity_id": "person.alex",
     }
 
     result = await _select_menu_option(hass, result["flow_id"], "select_child")
@@ -128,6 +133,10 @@ async def test_options_flow_manages_child_lifecycle(
     result = await _select_menu_option(hass, result["flow_id"], "edit_child")
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "edit_child"
+    person_key = next(
+        key for key in result["data_schema"].schema if key.schema == "person_entity_id"
+    )
+    assert person_key.description == {"suggested_value": "person.alex"}
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -137,6 +146,10 @@ async def test_options_flow_manages_child_lifecycle(
     assert (
         loaded_config_entry.runtime_data.data["children"]["kid_1"]["name"]
         == "Alexandra"
+    )
+    assert (
+        "person_entity_id"
+        not in loaded_config_entry.runtime_data.data["children"]["kid_1"]
     )
 
     result = await _select_menu_option(hass, result["flow_id"], "deactivate_child")

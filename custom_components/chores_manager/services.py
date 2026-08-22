@@ -25,6 +25,7 @@ from .const import (
     ATTR_CHORE_IDS,
     ATTR_ICON,
     ATTR_NAME,
+    ATTR_PERSON_ENTITY_ID,
     ATTR_POINTS,
     ATTR_REASON,
     ATTR_SORT_ORDER,
@@ -128,6 +129,10 @@ ADD_CHILD_SCHEMA = vol.Schema(
             str.strip,
             vol.Length(min=1, max=100),
         ),
+        vol.Optional(ATTR_PERSON_ENTITY_ID): vol.Any(
+            None,
+            vol.All(cv.entity_id, cv.entity_domain("person")),
+        ),
     }
 )
 
@@ -142,6 +147,10 @@ UPDATE_CHILD_SCHEMA = vol.Schema(
             cv.string,
             str.strip,
             vol.Length(min=1, max=100),
+        ),
+        vol.Optional(ATTR_PERSON_ENTITY_ID): vol.Any(
+            None,
+            vol.All(cv.entity_id, cv.entity_domain("person")),
         ),
     }
 )
@@ -589,17 +598,27 @@ async def async_setup_services(
         entry = _get_loaded_entry(hass)
         name: str = call.data[ATTR_NAME]
 
-        await entry.runtime_data.async_add_child(name)
+        await entry.runtime_data.async_add_child(
+            name,
+            call.data.get(ATTR_PERSON_ENTITY_ID),
+        )
 
     async def async_handle_update_child(call: ServiceCall) -> None:
         """Handle the update-child action."""
         entry = _get_loaded_entry(hass)
 
         try:
-            await entry.runtime_data.async_update_child(
-                call.data[ATTR_CHILD_ID],
-                call.data[ATTR_NAME],
-            )
+            if ATTR_PERSON_ENTITY_ID in call.data:
+                await entry.runtime_data.async_update_child(
+                    call.data[ATTR_CHILD_ID],
+                    call.data[ATTR_NAME],
+                    call.data[ATTR_PERSON_ENTITY_ID],
+                )
+            else:
+                await entry.runtime_data.async_update_child(
+                    call.data[ATTR_CHILD_ID],
+                    call.data[ATTR_NAME],
+                )
         except UnknownChildError as err:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,

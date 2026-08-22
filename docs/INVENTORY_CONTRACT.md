@@ -1,6 +1,6 @@
 # Chores Manager inventory contract
 
-The inventory contract is the backend-owned read-only structure API for future graphical management and custom-card work.
+The inventory contract is the backend-owned read-only structure API for graphical management and custom-card work.
 
 ## Transport
 
@@ -23,8 +23,9 @@ The command is admin-only. If Chores Manager does not have exactly one loaded co
   "children": [
     {
       "child_id": "kid_1",
-      "name": "Alex",
+      "name": "Avery",
       "active": true,
+      "person_entity_id": "person.avery",
       "points_entity_id": "sensor.kid_1_weekly_points"
     }
   ],
@@ -63,6 +64,7 @@ The command is admin-only. If Chores Manager does not have exactly one loaded co
 - Children, chores, and assignments include active and inactive records.
 - Entity IDs come from the Home Assistant entity registry so user-renamed entities are respected.
 - `points_entity_id` or `switch_entity_id` is `null` when no registry entry exists.
+- `person_entity_id` is omitted when the child has no Person association. It is presentation metadata and never an authorization boundary.
 - `switch_expected` is `true` only when the assignment, child, and chore are all active.
 - Completion history is not exposed by this contract.
 - Week boundaries are backend-owned and reflect the configured reset-after weekday;

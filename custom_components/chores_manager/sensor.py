@@ -95,12 +95,15 @@ class ChildWeeklyPointsSensor(SensorEntity):
         """Return information about the points period."""
         week_start, week_end = self._store.get_current_week_bounds()
 
-        return {
+        attributes = {
             "child_id": self._child_id,
             "kid_name": self._child["name"],
             "week_start": week_start.isoformat(),
             "week_end": week_end.isoformat(),
         }
+        if person_entity_id := self._child.get("person_entity_id"):
+            attributes["person_entity_id"] = person_entity_id
+        return attributes
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to Chores Manager data changes."""

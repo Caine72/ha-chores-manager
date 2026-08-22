@@ -18,6 +18,7 @@ CHORE_SWITCH = "switch.kid_1_chore_1"
 POINTS_SENSOR = "sensor.kid_1_weekly_points"
 WS_TYPE_INVENTORY = "chores_manager/inventory"
 WS_TYPE_CURRENT_WEEK_COMPLETIONS = "chores_manager/current_week_completions"
+WS_TYPE_CURRENT_WEEK_HISTORY = "chores_manager/current_week_history"
 WS_TYPE_SET_CURRENT_WEEK_COMPLETION = "chores_manager/set_current_week_completion"
 WS_TYPE_WEEKLY_POINTS = "chores_manager/weekly_points"
 WS_TYPE_ADJUST_WEEKLY_POINTS = "chores_manager/adjust_weekly_points"
@@ -56,6 +57,157 @@ async def _get_current_week_completions(
     client = await hass_ws_client(hass)
     await client.send_json_auto_id({"type": WS_TYPE_CURRENT_WEEK_COMPLETIONS})
     return await client.receive_json()
+
+
+async def _get_current_week_history(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    child_id: str = "kid_1",
+    access_token: str | None = None,
+) -> dict[str, Any]:
+    """Fetch one child's current-week history over WebSocket."""
+    client = (
+        await hass_ws_client(hass)
+        if access_token is None
+        else await hass_ws_client(hass, access_token)
+    )
+    await client.send_json_auto_id(
+        {"type": WS_TYPE_CURRENT_WEEK_HISTORY, "child_id": child_id}
+    )
+    return await client.receive_json()
+
+
+async def test_current_week_history_allows_sensor_reader_and_scopes_child(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_access_token: str,
+) -> None:
+    """Test a sensor reader sees only the requested child's current week."""
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
+    await _call_action(hass, "add_child", {"name": "Isabelle"})
+    store = loaded_config_entry.runtime_data
+    week_start, _ = store.get_current_week_bounds()
+    today = dt_util.now().date()
+    store.data["completions"] = {
+        "completion_1": {
+            "completed_at": dt_util.utcnow().isoformat(),
+            "local_date": week_start.isoformat(),
+            "child_id": "kid_1",
+            "chore_id": "chore_deleted",
+            "assignment_id": "assignment_deleted",
+            "child_name": "Alex",
+            "chore_title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+        "completion_2": {
+            "completed_at": dt_util.utcnow().isoformat(),
+            "local_date": today.isoformat(),
+            "child_id": "kid_2",
+            "chore_id": "chore_2",
+            "assignment_id": "assignment_2",
+            "child_name": "Isabelle",
+            "chore_title": "Feed the cat",
+            "category": "Cat",
+            "points": 1,
+        },
+        "completion_3": {
+            "completed_at": dt_util.utcnow().isoformat(),
+            "local_date": (week_start - timedelta(days=1)).isoformat(),
+            "child_id": "kid_1",
+            "chore_id": "chore_3",
+            "assignment_id": "assignment_3",
+            "child_name": "Alex",
+            "chore_title": "Previous week",
+            "category": "Other",
+            "points": 5,
+        },
+    }
+
+    response = await _get_current_week_history(
+        hass,
+        hass_ws_client,
+        access_token=hass_read_only_access_token,
+    )
+
+    assert response["success"]
+    assert response["result"] == {
+        "child_id": "kid_1",
+        "child_name": "Alex",
+        "person_entity_id": "person.alex",
+        "points_entity_id": POINTS_SENSOR,
+        "window": {
+            "start": week_start.isoformat(),
+            "end": today.isoformat(),
+        },
+        "completions": [
+            {
+                "completion_id": "completion_1",
+                "assignment_id": "assignment_deleted",
+                "assignment_exists": False,
+                "child_id": "kid_1",
+                "chore_id": "chore_deleted",
+                "local_date": week_start.isoformat(),
+                "completed_at": store.data["completions"]["completion_1"][
+                    "completed_at"
+                ],
+                "child_name": "Alex",
+                "chore_title": "Make the bed",
+                "category": "Morning",
+                "points": 2,
+            }
+        ],
+    }
+
+
+async def test_current_week_history_requires_sensor_read_permission(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_user: MockUser,
+    hass_read_only_access_token: str,
+) -> None:
+    """Test child history is hidden without weekly-sensor read access."""
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
+    hass_read_only_user.mock_policy({})
+
+    response = await _get_current_week_history(
+        hass,
+        hass_ws_client,
+        access_token=hass_read_only_access_token,
+    )
+
+    assert not response["success"]
+    assert response["error"]["code"] == "unauthorized"
+    assert loaded_config_entry.runtime_data.data["completions"] == {}
+
+
+async def test_current_week_history_rejects_unknown_child(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test history reports a missing child without exposing data."""
+    response = await _get_current_week_history(
+        hass,
+        hass_ws_client,
+        child_id="kid_missing",
+    )
+
+    assert not response["success"]
+    assert response["error"] == {
+        "code": "not_found",
+        "message": ("Child kid_missing or its weekly-points entity does not exist"),
+    }
 
 
 async def _set_current_week_completion(
@@ -109,7 +261,11 @@ async def test_weekly_points_returns_current_and_previous_totals(
     hass_read_only_access_token: str,
 ) -> None:
     """Test an entity reader can fetch both retained chore-week totals."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
     store = loaded_config_entry.runtime_data
     current_start, current_end = store.get_current_week_bounds()
     previous_start = current_start - timedelta(days=7)
@@ -146,6 +302,7 @@ async def test_weekly_points_returns_current_and_previous_totals(
     assert response["result"] == {
         "child_id": "kid_1",
         "child_name": "Alex",
+        "person_entity_id": "person.alex",
         "points_entity_id": POINTS_SENSOR,
         "can_adjust": False,
         "current_week": {
@@ -169,7 +326,11 @@ async def test_weekly_points_requires_sensor_read_permission(
     hass_read_only_access_token: str,
 ) -> None:
     """Test retained totals are hidden without points-sensor read access."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
     hass_read_only_user.mock_policy({})
 
     response = await _get_weekly_points(
@@ -188,7 +349,11 @@ async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
     hass_read_only_access_token: str,
 ) -> None:
     """Test a non-admin with entity control can create an audited adjustment."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
     hass_read_only_user.mock_policy({"entities": True})
 
     totals_response = await _get_weekly_points(
@@ -272,7 +437,11 @@ async def test_inventory_returns_stored_structure_and_entity_registry_ids(
     hass_ws_client: WebSocketGenerator,
 ) -> None:
     """Test inventory exposes structure, inactive records, and registry IDs."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "person_entity_id": "person.alex"},
+    )
     await _call_action(hass, "add_child", {"name": "Isabelle"})
     await _call_action(
         hass,
@@ -322,6 +491,7 @@ async def test_inventory_returns_stored_structure_and_entity_registry_ids(
             {
                 "child_id": "kid_1",
                 "name": "Alex",
+                "person_entity_id": "person.alex",
                 "active": True,
                 "points_entity_id": "sensor.alex_weekly_points",
             },

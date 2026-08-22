@@ -56,6 +56,14 @@ add_child:
       selector:
         text:
 
+    person_entity_id:
+      required: false
+      example: person.alex
+      selector:
+        entity:
+          filter:
+            domain: person
+
 update_child:
   fields:
     child_id:
@@ -69,6 +77,14 @@ update_child:
       example: Alexander
       selector:
         text:
+
+    person_entity_id:
+      required: false
+      example: person.alex
+      selector:
+        entity:
+          filter:
+            domain: person
 
 add_chore:
   fields:
