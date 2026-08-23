@@ -1,10 +1,12 @@
 """Test Chores Manager native management options flow."""
 
 from datetime import date
+from unittest.mock import AsyncMock, patch
 
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
 from .common import DOMAIN
@@ -652,3 +654,235 @@ async def test_options_flow_shows_assignment_parent_availability(
         result["description_placeholders"]["availability"]
         == "Switch unavailable: child inactive"
     )
+
+
+async def test_options_flow_empty_and_inactive_household_guidance(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test empty and inactive households return useful management guidance."""
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "children_menu")
+    assert result["menu_options"] == ["add_child", "init"]
+
+    result = await _select_menu_option(hass, result["flow_id"], "init")
+    result = await _select_menu_option(hass, result["flow_id"], "chores_menu")
+    assert result["menu_options"] == ["add_chore", "init"]
+
+    result = await _select_menu_option(hass, result["flow_id"], "init")
+    result = await _select_menu_option(hass, result["flow_id"], "assignments_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "add_assignment_child")
+    assert result["step_id"] == "assignment_unavailable"
+    assert result["errors"] == {"base": "no_active_assignment_children"}
+
+    await hass.services.async_call(
+        DOMAIN,
+        "add_child",
+        {"name": "Alex"},
+        blocking=True,
+    )
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    result = await _select_menu_option(hass, result["flow_id"], "add_assignment_child")
+    assert result["step_id"] == "assignment_unavailable"
+    assert result["errors"] == {"base": "no_active_assignment_chores"}
+
+
+async def test_options_flow_rejects_stale_and_tampered_selections(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test selectors recover when household data changes while a flow is open."""
+    for name in ("Alex", "Isabelle", "Jordan"):
+        await hass.services.async_call(
+            DOMAIN,
+            "add_child",
+            {"name": name},
+            blocking=True,
+        )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {"title": "Make the bed", "category": "Morning", "points": 2},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {"title": "Feed the cat", "category": "Evening", "points": 3},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "children_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "select_child")
+    await hass.services.async_call(
+        DOMAIN, "delete_child", {"child_id": "kid_3"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"child_id": "kid_3"}
+    )
+    assert result["step_id"] == "select_child"
+    assert result["errors"] == {"base": "unknown_child"}
+
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "chores_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "select_chore")
+    await hass.services.async_call(
+        DOMAIN, "delete_chore", {"chore_id": "chore_1"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"chore_id": "chore_1"}
+    )
+    assert result["step_id"] == "select_chore"
+    assert result["errors"] == {"base": "unknown_chore"}
+
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {"title": "Feed the cat", "category": "Evening", "points": 3},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "assignments_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "select_assignment")
+    await hass.services.async_call(
+        DOMAIN,
+        "delete_assignment",
+        {"assignment_id": "assignment_4"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"assignment_id": "assignment_4"}
+    )
+    assert result["step_id"] == "select_assignment"
+    assert result["errors"] == {"base": "unknown_assignment"}
+
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "assignments_menu")
+    result = await _select_menu_option(
+        hass, result["flow_id"], "remove_assignment_child"
+    )
+    await hass.services.async_call(
+        DOMAIN, "delete_child", {"child_id": "kid_2"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"child_id": "kid_2"}
+    )
+    assert result["step_id"] == "remove_assignment_child"
+    assert result["errors"] == {"base": "unknown_child"}
+
+    await hass.services.async_call(
+        DOMAIN, "add_child", {"name": "Casey"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "assignments_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "add_assignment_child")
+    await hass.services.async_call(
+        DOMAIN, "delete_child", {"child_id": "kid_4"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"child_id": "kid_4"}
+    )
+    assert result["step_id"] == "add_assignment_child"
+    assert result["errors"] == {"base": "unknown_child"}
+
+
+async def test_options_flow_surfaces_action_failures_and_allows_retry(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test a transient action failure keeps the form open for a safe retry."""
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "children_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "add_child")
+
+    error = ServiceValidationError(
+        translation_domain=DOMAIN,
+        translation_key="unknown_child",
+    )
+    with patch(
+        "homeassistant.core.ServiceRegistry.async_call",
+        AsyncMock(side_effect=error),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"name": "Alex"}
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "add_child"
+    assert result["errors"] == {"base": "unknown_child"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"name": "Alex"}
+    )
+    assert result["type"] is FlowResultType.MENU
+    assert loaded_config_entry.runtime_data.data["children"]["kid_1"]["name"] == "Alex"
+
+
+async def test_options_flow_recovers_from_objects_removed_mid_flow(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test management returns to a safe menu when selected data disappears."""
+    await hass.services.async_call(
+        DOMAIN,
+        "add_child",
+        {"name": "Alex"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_chore",
+        {"title": "Make the bed", "category": "Morning", "points": 2},
+        blocking=True,
+    )
+
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "children_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "select_child")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"child_id": "kid_1"}
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "delete_child",
+        {"child_id": "kid_1"},
+        blocking=True,
+    )
+    result = await _select_menu_option(hass, result["flow_id"], "edit_child")
+    assert result["step_id"] == "children_menu"
+
+    await hass.services.async_call(
+        DOMAIN,
+        "add_child",
+        {"name": "Alex"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "add_assignment",
+        {"child_id": "kid_2", "chore_id": "chore_1"},
+        blocking=True,
+    )
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "chores_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "select_chore")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"chore_id": "chore_1"}
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "delete_chore",
+        {"chore_id": "chore_1"},
+        blocking=True,
+    )
+    result = await _select_menu_option(hass, result["flow_id"], "edit_chore")
+    assert result["step_id"] == "chores_menu"

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+ha_core_root="${HA_CORE_ROOT:-/workspaces/home-assistant-core-dev}"
+domain="chores_manager"
+component_source="${repo_root}/custom_components/${domain}"
+component_target="${ha_core_root}/config/custom_components/${domain}"
+test_source="${repo_root}/tests/components/${domain}"
+test_target="${ha_core_root}/tests/components/${domain}"
+result_dir="$(mktemp -d)"
+coverage_json="${result_dir}/coverage.json"
+pytest_log="${result_dir}/pytest.log"
+
+cleanup() {
+  rm -rf "${result_dir}"
+}
+trap cleanup EXIT
+
+if [[ ! -d "${ha_core_root}/tests/components" ]]; then
+  printf 'QUALITY ERROR core-not-found=%s\n' "${ha_core_root}" >&2
+  exit 2
+fi
+
+mkdir -p "$(dirname "${component_target}")" "$(dirname "${test_target}")"
+
+if [[ -e "${component_target}" && ! -L "${component_target}" ]]; then
+  printf 'QUALITY ERROR component-target-not-symlink=%s\n' "${component_target}" >&2
+  exit 2
+fi
+
+if [[ -e "${test_target}" && ! -L "${test_target}" ]]; then
+  printf 'QUALITY ERROR test-target-not-symlink=%s\n' "${test_target}" >&2
+  exit 2
+fi
+
+ln -sfnT "${component_source}" "${component_target}"
+ln -sfnT "${test_source}" "${test_target}"
+
+cd "${ha_core_root}"
+
+if ! pytest -q \
+  --disable-warnings \
+  --cov="config/custom_components/${domain}" \
+  --cov-report="json:${coverage_json}" \
+  "tests/components/${domain}" >"${pytest_log}" 2>&1; then
+  printf 'QUALITY FAIL tests\n' >&2
+  tail -n 20 "${pytest_log}" >&2
+  exit 1
+fi
+
+python - "${coverage_json}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+files = report["files"]
+config_flow = next(
+    details
+    for path, details in files.items()
+    if path.endswith("/custom_components/chores_manager/config_flow.py")
+)
+total = report["totals"]["percent_covered"]
+flow = config_flow["summary"]["percent_covered"]
+status = "PASS" if total > 95 and flow == 100 else "GAP"
+print(f"QUALITY {status} total={total:.1f}% flow={flow:.1f}%")
+
+if status == "GAP":
+    print("TARGET total>95% flow=100% (add only behaviorally valuable tests)")
+PY
