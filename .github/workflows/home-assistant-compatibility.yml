@@ -127,4 +127,4 @@ jobs:
                   source = source.replace(old, new)
               path.write_text(source, encoding="utf-8")
           PY
-          pytest -q tests/components/chores_manager
+          pytest -q --asyncio-mode=auto tests/components/chores_manager
