@@ -83,6 +83,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: integration
+          persist-credentials: false
 
       - name: Check out Home Assistant Core
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,6 +91,7 @@ jobs:
           repository: home-assistant/core
           ref: ${{ matrix.ref }}
           path: core
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -102,12 +104,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
-          enable-cache: true
-          cache-dependency-glob: |
-            core/requirements.txt
-            core/requirements_all.txt
-            core/requirements_test.txt
-            core/requirements_test_pre_commit.txt
+          enable-cache: false
 
       - name: Install Home Assistant test dependencies
         working-directory: core
