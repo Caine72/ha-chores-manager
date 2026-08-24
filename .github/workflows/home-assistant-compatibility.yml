@@ -93,43 +93,42 @@ jobs:
           path: core
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version-file: core/.python-version
-
-      - name: Install zsh
-        run: sudo apt-get update && sudo apt-get install -y zsh
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-        with:
-          enable-cache: false
-
-      - name: Install Home Assistant test dependencies
-        working-directory: core
-        run: |
-          uv venv .venv --python "${pythonLocation}/bin/python"
-          . .venv/bin/activate
-          uv pip install \
-            -r requirements.txt \
-            -r requirements_all.txt \
-            -r requirements_test.txt \
-            -r requirements_test_pre_commit.txt
-          uv pip install -e . --config-settings editable_mode=compat
-          python -m script.translations develop --all
-
-      - name: Link integration into Home Assistant Core
-        run: |
-          mkdir -p core/config/custom_components
-          ln -sfnT \
-            "${GITHUB_WORKSPACE}/integration/custom_components/chores_manager" \
-            "${GITHUB_WORKSPACE}/core/config/custom_components/chores_manager"
-
-      - name: Run project validation
-        working-directory: integration
+      - name: Run isolated project validation
         env:
-          HA_CORE_ROOT: ${{ github.workspace }}/core
+          HA_CORE_IMAGE: ghcr.io/home-assistant/home-assistant:${{ matrix.ref }}
         run: |
-          . ../core/.venv/bin/activate
-          ./scripts/validate
+          docker run --rm \
+            --entrypoint bash \
+            --volume "${GITHUB_WORKSPACE}/integration:/workspace/integration:ro" \
+            --volume "${GITHUB_WORKSPACE}/core:/workspace/core:ro" \
+            "${HA_CORE_IMAGE}" \
+            -euo pipefail -c '
+              if command -v apk >/dev/null; then
+                apk add --no-cache git zsh
+              else
+                apt-get update
+                apt-get install -y --no-install-recommends git zsh
+              fi
+
+              mkdir -p /tmp/core
+              tar -C /workspace/core --exclude=.git -cf - . | tar -C /tmp/core -xf -
+
+              python -m venv --system-site-packages /tmp/venv
+              /tmp/venv/bin/python -m pip install uv
+              /tmp/venv/bin/uv pip install \
+                --python /tmp/venv/bin/python \
+                -r /tmp/core/requirements_test.txt \
+                -r /tmp/core/requirements_test_pre_commit.txt
+
+              cd /tmp/core
+              /tmp/venv/bin/python -m script.translations develop --all
+              mkdir -p config/custom_components
+              ln -sfnT \
+                /workspace/integration/custom_components/chores_manager \
+                config/custom_components/chores_manager
+
+              cd /workspace/integration
+              PATH="/tmp/venv/bin:${PATH}" \
+                HA_CORE_ROOT=/tmp/core \
+                zsh ./scripts/validate
+            '
