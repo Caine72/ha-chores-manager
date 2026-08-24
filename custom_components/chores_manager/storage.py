@@ -296,7 +296,7 @@ class ChoresManagerStore:
         self,
         child_id: str,
         name: str,
-        person_entity_id: str | None | object = _PERSON_ENTITY_UNCHANGED,
+        person_entity_id: str | object | None = _PERSON_ENTITY_UNCHANGED,
     ) -> bool:
         """Update child metadata and return whether it changed."""
         async with self._lock:
