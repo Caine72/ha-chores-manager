@@ -35,7 +35,7 @@ jobs:
     name: Project validation
     runs-on: ubuntu-latest
     env:
-      HA_CORE_REF: "2026.7.0"
+      HA_CORE_REF: "2026.8.3"
     steps:
       - name: Check out Chores Manager
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
