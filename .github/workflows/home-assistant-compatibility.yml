@@ -85,50 +85,46 @@ jobs:
           path: integration
           persist-credentials: false
 
-      - name: Check out Home Assistant Core
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          repository: home-assistant/core
-          ref: ${{ matrix.ref }}
-          path: core
-          persist-credentials: false
+          python-version: "3.14"
 
-      - name: Run isolated project validation
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: false
+
+      - name: Install compatibility test environment
+        working-directory: integration
         env:
-          HA_CORE_IMAGE: ghcr.io/home-assistant/home-assistant:${{ matrix.ref }}
+          HA_VERSION: ${{ matrix.ref }}
         run: |
-          docker run --rm \
-            --entrypoint bash \
-            --volume "${GITHUB_WORKSPACE}/integration:/workspace/integration:ro" \
-            --volume "${GITHUB_WORKSPACE}/core:/workspace/core:ro" \
-            "${HA_CORE_IMAGE}" \
-            -euo pipefail -c '
-              if command -v apk >/dev/null; then
-                apk add --no-cache git zsh
-              else
-                apt-get update
-                apt-get install -y --no-install-recommends git zsh
-              fi
+          uv venv .venv --python "${pythonLocation}/bin/python"
+          . .venv/bin/activate
+          uv pip install \
+            "homeassistant==${HA_VERSION}" \
+            pytest-homeassistant-custom-component
 
-              mkdir -p /tmp/core
-              tar -C /workspace/core --exclude=.git -cf - . | tar -C /tmp/core -xf -
+      - name: Run full backend test suite
+        working-directory: integration
+        run: |
+          . .venv/bin/activate
+          python - <<'PY'
+          from pathlib import Path
 
-              python -m venv --system-site-packages /tmp/venv
-              /tmp/venv/bin/python -m pip install uv
-              /tmp/venv/bin/uv pip install \
-                --python /tmp/venv/bin/python \
-                -r /tmp/core/requirements_test.txt \
-                -r /tmp/core/requirements_test_pre_commit.txt
-
-              cd /tmp/core
-              /tmp/venv/bin/python -m script.translations develop --all
-              mkdir -p config/custom_components
-              ln -sfnT \
-                /workspace/integration/custom_components/chores_manager \
-                config/custom_components/chores_manager
-
-              cd /workspace/integration
-              PATH="/tmp/venv/bin:${PATH}" \
-                HA_CORE_ROOT=/tmp/core \
-                zsh ./scripts/validate
-            '
+          replacements = {
+              "from tests.common import": (
+                  "from pytest_homeassistant_custom_component.common import"
+              ),
+              "from tests.typing import": (
+                  "from pytest_homeassistant_custom_component.typing import"
+              ),
+          }
+          for path in Path("tests").rglob("*.py"):
+              source = path.read_text(encoding="utf-8")
+              for old, new in replacements.items():
+                  source = source.replace(old, new)
+              path.write_text(source, encoding="utf-8")
+          PY
+          pytest -q tests/components/chores_manager
