@@ -3,14 +3,22 @@
 from datetime import datetime
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
 from . import websocket_api
-from .const import CONF_RESET_AFTER_WEEKDAY, DEFAULT_RESET_AFTER_WEEKDAY, PLATFORMS
+from .const import (
+    CONF_RESET_AFTER_WEEKDAY,
+    DEFAULT_RESET_AFTER_WEEKDAY,
+    DOMAIN,
+    PLATFORMS,
+)
 from .models import ChoresManagerConfigEntry
 from .services import async_setup_services
 from .storage import ChoresManagerStore
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(
