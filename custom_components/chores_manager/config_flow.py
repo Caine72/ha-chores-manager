@@ -12,6 +12,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     ATTR_ACTIVE,
+    ATTR_ADJUSTMENT_USER_IDS,
     ATTR_ASSIGNMENT_ID,
     ATTR_CATEGORY,
     ATTR_CHILD_ID,
@@ -46,6 +47,7 @@ from .const import (
 from .models import ChoresManagerConfigEntry
 
 ADVANCED_CHORE_OPTIONS = "advanced_chore_options"
+RESTRICT_ADJUSTMENTS = "restrict_adjustments"
 WEEKDAY_LABELS = {weekday: weekday.capitalize() for weekday in WEEKDAY_NAMES}
 
 
@@ -158,6 +160,27 @@ class ChoresManagerOptionsFlow(OptionsFlow):
                 key=lambda item: _stable_id_sort_key(item[0]),
             )
             if child["active"]
+        ]
+
+    async def _user_options(
+        self,
+        selected_user_ids: list[str] | None = None,
+    ) -> list[selector.SelectOptionDict]:
+        """Return active Home Assistant users plus retained selected IDs."""
+        users = await self.hass.auth.async_get_users()
+        options = {
+            user.id: user.name or user.id
+            for user in users
+            if user.is_active and not user.system_generated
+        }
+        for user_id in selected_user_ids or []:
+            options.setdefault(user_id, user_id)
+        return [
+            selector.SelectOptionDict(value=user_id, label=label)
+            for user_id, label in sorted(
+                options.items(),
+                key=lambda item: (item[1].casefold(), item[0]),
+            )
         ]
 
     def _category_options(self) -> list[str]:
@@ -424,11 +447,21 @@ class ChoresManagerOptionsFlow(OptionsFlow):
         """Add a child."""
         errors: dict[str, str] = {}
         if user_input is not None:
+            adjustment_user_ids = (
+                user_input.get(ATTR_ADJUSTMENT_USER_IDS, [])
+                if user_input[RESTRICT_ADJUSTMENTS]
+                else None
+            )
             error = await self._async_call_action(
                 SERVICE_ADD_CHILD,
                 {
-                    **user_input,
+                    **{
+                        key: value
+                        for key, value in user_input.items()
+                        if key != RESTRICT_ADJUSTMENTS
+                    },
                     ATTR_PERSON_ENTITY_ID: user_input.get(ATTR_PERSON_ENTITY_ID),
+                    ATTR_ADJUSTMENT_USER_IDS: adjustment_user_ids,
                 },
             )
             if error is None:
@@ -442,6 +475,17 @@ class ChoresManagerOptionsFlow(OptionsFlow):
                     vol.Required(ATTR_NAME): selector.TextSelector(),
                     vol.Optional(ATTR_PERSON_ENTITY_ID): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="person")
+                    ),
+                    vol.Optional(
+                        RESTRICT_ADJUSTMENTS,
+                        default=False,
+                    ): selector.BooleanSelector(),
+                    vol.Optional(ATTR_ADJUSTMENT_USER_IDS): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=await self._user_options(),
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
                     ),
                 }
             ),
@@ -521,12 +565,22 @@ class ChoresManagerOptionsFlow(OptionsFlow):
 
         errors: dict[str, str] = {}
         if user_input is not None:
+            adjustment_user_ids = (
+                user_input.get(ATTR_ADJUSTMENT_USER_IDS, [])
+                if user_input[RESTRICT_ADJUSTMENTS]
+                else None
+            )
             error = await self._async_call_action(
                 SERVICE_UPDATE_CHILD,
                 {
                     ATTR_CHILD_ID: self._selected_child_id,
-                    **user_input,
+                    **{
+                        key: value
+                        for key, value in user_input.items()
+                        if key != RESTRICT_ADJUSTMENTS
+                    },
                     ATTR_PERSON_ENTITY_ID: user_input.get(ATTR_PERSON_ENTITY_ID),
+                    ATTR_ADJUSTMENT_USER_IDS: adjustment_user_ids,
                 },
             )
             if error is None:
@@ -542,11 +596,29 @@ class ChoresManagerOptionsFlow(OptionsFlow):
                         vol.Optional(ATTR_PERSON_ENTITY_ID): selector.EntitySelector(
                             selector.EntitySelectorConfig(domain="person")
                         ),
+                        vol.Optional(
+                            RESTRICT_ADJUSTMENTS,
+                            default=False,
+                        ): selector.BooleanSelector(),
+                        vol.Optional(ATTR_ADJUSTMENT_USER_IDS): selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=await self._user_options(
+                                    child.get(ATTR_ADJUSTMENT_USER_IDS)
+                                ),
+                                multiple=True,
+                                mode=selector.SelectSelectorMode.DROPDOWN,
+                            )
+                        ),
                     }
                 ),
                 {
                     ATTR_NAME: child["name"],
                     ATTR_PERSON_ENTITY_ID: child.get("person_entity_id"),
+                    RESTRICT_ADJUSTMENTS: ATTR_ADJUSTMENT_USER_IDS in child,
+                    ATTR_ADJUSTMENT_USER_IDS: child.get(
+                        ATTR_ADJUSTMENT_USER_IDS,
+                        [],
+                    ),
                 },
             ),
             errors=errors,

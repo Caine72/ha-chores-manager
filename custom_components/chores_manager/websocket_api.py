@@ -15,7 +15,14 @@ from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
-from .const import ATTR_AMOUNT, ATTR_ASSIGNMENT_ID, ATTR_CHILD_ID, ATTR_REASON, DOMAIN
+from .const import (
+    ATTR_ADJUSTMENT_USER_IDS,
+    ATTR_AMOUNT,
+    ATTR_ASSIGNMENT_ID,
+    ATTR_CHILD_ID,
+    ATTR_REASON,
+    DOMAIN,
+)
 from .exceptions import (
     CorrectionDateOutsideCurrentWeekError,
     UnknownAssignmentError,
@@ -107,6 +114,36 @@ def _has_points_permission(
 ) -> bool:
     """Return whether a connection has an entity permission."""
     return connection.user.permissions.check_entity(entity_id, permission)
+
+
+def _can_adjust_points(
+    connection: websocket_api.ActiveConnection,
+    store: ChoresManagerStore,
+    child_id: str,
+    entity_id: str,
+) -> bool:
+    """Return whether a connection may adjust one child's weekly points."""
+    if not _has_points_permission(connection, entity_id, POLICY_CONTROL):
+        return False
+    if connection.user.is_admin:
+        return True
+    allowed_user_ids = store.data["children"][child_id].get(ATTR_ADJUSTMENT_USER_IDS)
+    return allowed_user_ids is None or connection.user.id in allowed_user_ids
+
+
+def _require_adjustment_permission(
+    connection: websocket_api.ActiveConnection,
+    store: ChoresManagerStore,
+    child_id: str,
+    entity_id: str,
+) -> None:
+    """Require backend adjustment access for one child."""
+    if not _can_adjust_points(connection, store, child_id, entity_id):
+        raise Unauthorized(
+            user_id=connection.user.id,
+            entity_id=entity_id,
+            permission=POLICY_CONTROL,
+        )
 
 
 def _build_weekly_points(
@@ -301,10 +338,11 @@ def websocket_weekly_points(
         return
 
     _require_points_permission(connection, result["points_entity_id"], POLICY_READ)
-    result["can_adjust"] = _has_points_permission(
+    result["can_adjust"] = _can_adjust_points(
         connection,
+        entry.runtime_data,
+        msg[ATTR_CHILD_ID],
         result["points_entity_id"],
-        POLICY_CONTROL,
     )
     connection.send_result(msg["id"], result)
 
@@ -392,7 +430,12 @@ async def websocket_adjust_weekly_points(
         )
         return
 
-    _require_points_permission(connection, entity_id, POLICY_CONTROL)
+    _require_adjustment_permission(
+        connection,
+        entry.runtime_data,
+        msg[ATTR_CHILD_ID],
+        entity_id,
+    )
     previous_total = store.get_current_week_points(msg[ATTR_CHILD_ID])
 
     try:

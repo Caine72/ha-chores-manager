@@ -55,6 +55,10 @@
         "person_entity_id": {
           "name": "Person",
           "description": "Optional Home Assistant Person used for the child's portrait."
+        },
+        "adjustment_user_ids": {
+          "name": "Point-adjustment users",
+          "description": "Optional Home Assistant user IDs allowed to adjust this child's points. Omit for all users; use an empty list for administrators only."
         }
       }
     },
@@ -73,6 +77,10 @@
         "person_entity_id": {
           "name": "Person",
           "description": "Optional Home Assistant Person used for the child's portrait. Set to null to remove the association."
+        },
+        "adjustment_user_ids": {
+          "name": "Point-adjustment users",
+          "description": "Optional Home Assistant user IDs allowed to adjust this child's points. Omit to preserve the current rule, set to null for all users, or use an empty list for administrators only."
         }
       }
     },
@@ -360,8 +368,14 @@
       },
       "add_child": {
         "data": {
+          "adjustment_user_ids": "Users allowed to adjust points",
           "name": "Name",
-          "person_entity_id": "Person (optional)"
+          "person_entity_id": "Person (optional)",
+          "restrict_adjustments": "Limit point adjustments to selected users"
+        },
+        "data_description": {
+          "adjustment_user_ids": "Administrators are always allowed. Leave the user list empty to allow administrators only.",
+          "restrict_adjustments": "When disabled, any user with Home Assistant control permission for the weekly-points sensor may adjust points."
         },
         "title": "Add child",
         "submit": "Add child"
@@ -387,8 +401,14 @@
       },
       "edit_child": {
         "data": {
+          "adjustment_user_ids": "Users allowed to adjust points",
           "name": "Name",
-          "person_entity_id": "Person (optional)"
+          "person_entity_id": "Person (optional)",
+          "restrict_adjustments": "Limit point adjustments to selected users"
+        },
+        "data_description": {
+          "adjustment_user_ids": "Administrators are always allowed. Leave the user list empty to allow administrators only.",
+          "restrict_adjustments": "When disabled, any user with Home Assistant control permission for the weekly-points sensor may adjust points."
         },
         "title": "Edit child",
         "submit": "Save child"

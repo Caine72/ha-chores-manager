@@ -38,6 +38,7 @@ from .exceptions import (
 
 type StoreListener = Callable[[], None]
 _PERSON_ENTITY_UNCHANGED = object()
+_ADJUSTMENT_USERS_UNCHANGED = object()
 
 
 class ChildData(TypedDict):
@@ -46,6 +47,7 @@ class ChildData(TypedDict):
     name: str
     active: bool
     person_entity_id: NotRequired[str]
+    adjustment_user_ids: NotRequired[list[str]]
 
 
 class ChoreData(TypedDict):
@@ -273,6 +275,7 @@ class ChoresManagerStore:
         self,
         name: str,
         person_entity_id: str | None = None,
+        adjustment_user_ids: list[str] | None = None,
     ) -> str:
         """Add a child and return its stable ID."""
         async with self._lock:
@@ -285,6 +288,8 @@ class ChoresManagerStore:
             }
             if person_entity_id is not None:
                 child["person_entity_id"] = person_entity_id
+            if adjustment_user_ids is not None:
+                child["adjustment_user_ids"] = list(adjustment_user_ids)
             self.data["children"][child_id] = child
             self.data["next_child_id"] = child_number + 1
 
@@ -297,6 +302,7 @@ class ChoresManagerStore:
         child_id: str,
         name: str,
         person_entity_id: str | object | None = _PERSON_ENTITY_UNCHANGED,
+        adjustment_user_ids: list[str] | object | None = _ADJUSTMENT_USERS_UNCHANGED,
     ) -> bool:
         """Update child metadata and return whether it changed."""
         async with self._lock:
@@ -308,7 +314,15 @@ class ChoresManagerStore:
                 person_entity_id is not _PERSON_ENTITY_UNCHANGED
                 and child.get("person_entity_id") != person_entity_id
             )
-            if child["name"] == name and not person_changed:
+            adjustment_users_changed = (
+                adjustment_user_ids is not _ADJUSTMENT_USERS_UNCHANGED
+                and child.get("adjustment_user_ids") != adjustment_user_ids
+            )
+            if (
+                child["name"] == name
+                and not person_changed
+                and not adjustment_users_changed
+            ):
                 return False
 
             child["name"] = name
@@ -317,6 +331,11 @@ class ChoresManagerStore:
                     child.pop("person_entity_id", None)
                 elif isinstance(person_entity_id, str):
                     child["person_entity_id"] = person_entity_id
+            if adjustment_user_ids is not _ADJUSTMENT_USERS_UNCHANGED:
+                if adjustment_user_ids is None:
+                    child.pop("adjustment_user_ids", None)
+                elif isinstance(adjustment_user_ids, list):
+                    child["adjustment_user_ids"] = list(adjustment_user_ids)
             await self.async_save()
 
         return True

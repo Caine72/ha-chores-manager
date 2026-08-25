@@ -64,6 +64,14 @@ add_child:
           filter:
             domain: person
 
+    adjustment_user_ids:
+      required: false
+      example:
+        - 0123456789abcdef0123456789abcdef
+      selector:
+        text:
+          multiple: true
+
 update_child:
   fields:
     child_id:
@@ -85,6 +93,14 @@ update_child:
         entity:
           filter:
             domain: person
+
+    adjustment_user_ids:
+      required: false
+      example:
+        - 0123456789abcdef0123456789abcdef
+      selector:
+        text:
+          multiple: true
 
 add_chore:
   fields:

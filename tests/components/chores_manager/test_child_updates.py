@@ -137,6 +137,49 @@ async def test_update_child_refreshes_selected_child_live_metadata(
     assert _state(hass, ISABELLE_CHORE_2).name == "Isabelle Feed the cat"
 
 
+async def test_update_child_manages_adjustment_user_allowlist(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test child actions preserve, replace, and clear adjustment users."""
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "adjustment_user_ids": ["parent-1"]},
+    )
+    child = loaded_config_entry.runtime_data.data["children"]["kid_1"]
+    assert child["adjustment_user_ids"] == ["parent-1"]
+
+    await _call_action(
+        hass,
+        "update_child",
+        {"child_id": "kid_1", "name": "Alexander"},
+    )
+    assert child["adjustment_user_ids"] == ["parent-1"]
+
+    await _call_action(
+        hass,
+        "update_child",
+        {
+            "child_id": "kid_1",
+            "name": "Alexander",
+            "adjustment_user_ids": [],
+        },
+    )
+    assert child["adjustment_user_ids"] == []
+
+    await _call_action(
+        hass,
+        "update_child",
+        {
+            "child_id": "kid_1",
+            "name": "Alexander",
+            "adjustment_user_ids": None,
+        },
+    )
+    assert "adjustment_user_ids" not in child
+
+
 async def test_update_child_preserves_stable_ids_and_registry_identity(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,

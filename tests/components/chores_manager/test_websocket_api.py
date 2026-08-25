@@ -87,7 +87,10 @@ async def test_current_week_history_allows_sensor_reader_and_scopes_child(
     await _call_action(
         hass,
         "add_child",
-        {"name": "Alex", "person_entity_id": "person.alex"},
+        {
+            "name": "Alex",
+            "person_entity_id": "person.alex",
+        },
     )
     await _call_action(hass, "add_child", {"name": "Isabelle"})
     store = loaded_config_entry.runtime_data
@@ -176,7 +179,10 @@ async def test_current_week_history_requires_sensor_read_permission(
     await _call_action(
         hass,
         "add_child",
-        {"name": "Alex", "person_entity_id": "person.alex"},
+        {
+            "name": "Alex",
+            "person_entity_id": "person.alex",
+        },
     )
     hass_read_only_user.mock_policy({})
 
@@ -352,7 +358,11 @@ async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
     await _call_action(
         hass,
         "add_child",
-        {"name": "Alex", "person_entity_id": "person.alex"},
+        {
+            "name": "Alex",
+            "person_entity_id": "person.alex",
+            "adjustment_user_ids": [hass_read_only_user.id],
+        },
     )
     hass_read_only_user.mock_policy({"entities": True})
 
@@ -384,6 +394,39 @@ async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
     )
 
 
+async def test_adjust_weekly_points_rejects_controller_outside_child_allowlist(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_user: MockUser,
+    hass_read_only_access_token: str,
+) -> None:
+    """Test entity control alone does not bypass a configured child allowlist."""
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "adjustment_user_ids": ["another-user"]},
+    )
+    hass_read_only_user.mock_policy({"entities": True})
+
+    totals_response = await _get_weekly_points(
+        hass, hass_ws_client, hass_read_only_access_token
+    )
+    assert totals_response["success"]
+    assert totals_response["result"]["can_adjust"] is False
+
+    response = await _adjust_weekly_points(
+        hass,
+        hass_ws_client,
+        {"child_id": "kid_1", "amount": 1},
+        hass_read_only_access_token,
+    )
+
+    assert not response["success"]
+    assert response["error"]["code"] == "unauthorized"
+    assert loaded_config_entry.runtime_data.data["adjustments"] == {}
+
+
 async def test_adjust_weekly_points_rejects_read_only_user(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,
@@ -411,7 +454,11 @@ async def test_adjust_weekly_points_reports_clamped_decrement(
     hass_ws_client: WebSocketGenerator,
 ) -> None:
     """Test adjustment response reports the backend-applied delta and total."""
-    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "adjustment_user_ids": []},
+    )
     await _call_action(
         hass,
         "increment_weekly_counter",

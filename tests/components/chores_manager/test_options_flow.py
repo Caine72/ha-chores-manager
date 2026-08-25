@@ -11,7 +11,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .common import DOMAIN
 
-from tests.common import MockConfigEntry
+from tests.common import MockConfigEntry, MockUser
 
 
 async def _select_menu_option(
@@ -165,6 +165,68 @@ async def test_options_flow_manages_child_lifecycle(
     result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.MENU
     assert loaded_config_entry.runtime_data.data["children"] == {}
+
+
+async def test_options_flow_manages_child_adjustment_users(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_read_only_user: MockUser,
+) -> None:
+    """Test child management configures and clears the adjustment allowlist."""
+    result = await hass.config_entries.options.async_init(loaded_config_entry.entry_id)
+    result = await _select_menu_option(hass, result["flow_id"], "children_menu")
+    result = await _select_menu_option(hass, result["flow_id"], "add_child")
+
+    user_ids_key = next(
+        key
+        for key in result["data_schema"].schema
+        if key.schema == "adjustment_user_ids"
+    )
+    user_selector = result["data_schema"].schema[user_ids_key]
+    assert user_selector.config["multiple"] is True
+    assert hass_read_only_user.id in {
+        option["value"] for option in user_selector.config["options"]
+    }
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "name": "Alex",
+            "restrict_adjustments": True,
+            "adjustment_user_ids": [hass_read_only_user.id],
+        },
+    )
+    child = loaded_config_entry.runtime_data.data["children"]["kid_1"]
+    assert child["adjustment_user_ids"] == [hass_read_only_user.id]
+
+    result = await _select_menu_option(hass, result["flow_id"], "select_child")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"child_id": "kid_1"},
+    )
+    result = await _select_menu_option(hass, result["flow_id"], "edit_child")
+    restrict_key = next(
+        key
+        for key in result["data_schema"].schema
+        if key.schema == "restrict_adjustments"
+    )
+    assert restrict_key.description == {"suggested_value": True}
+    user_ids_key = next(
+        key
+        for key in result["data_schema"].schema
+        if key.schema == "adjustment_user_ids"
+    )
+    assert user_ids_key.description == {"suggested_value": [hass_read_only_user.id]}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"name": "Alex", "restrict_adjustments": False},
+    )
+    assert result["step_id"] == "child_actions"
+    assert (
+        "adjustment_user_ids"
+        not in loaded_config_entry.runtime_data.data["children"]["kid_1"]
+    )
 
 
 async def test_options_flow_manages_chore_lifecycle(

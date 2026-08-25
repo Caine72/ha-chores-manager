@@ -31,8 +31,9 @@ current week. The backend calculates both intervals from the configured reset-af
 weekday; consumers must use the returned dates rather than calculating weekdays.
 Totals include completion snapshots and audited adjustments.
 `can_adjust` reports whether this caller has `control` permission for the resolved
-weekly-points sensor, allowing cards to omit the adjustment workflow without inferring
-authorization from administrator status or frontend visibility rules.
+weekly-points sensor and is allowed by the child's optional adjustment-user list.
+Administrators remain allowed. Cards may use the value to omit the adjustment workflow
+without treating presentation as authorization.
 
 `person_entity_id` is omitted when no Person is associated with the child. It is an optional portrait hint only and does not affect entity permissions.
 
@@ -50,7 +51,7 @@ Request:
 ```
 
 The caller must have Home Assistant `control` permission for the child's weekly-points
-sensor. `amount` is a signed non-zero integer from `-100` through `100`; `reason` is
+sensor and pass the child's optional adjustment-user allowlist. `amount` is a signed non-zero integer from `-100` through `100`; `reason` is
 optional, trimmed, and limited to 200 characters. Positive amounts increment and
 negative amounts decrement. Decrements clamp at zero.
 

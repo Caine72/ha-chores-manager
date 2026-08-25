@@ -18,6 +18,7 @@ Development is AI-assisted.
 - Choose which weekday ends the chore week.
 - Correct current-week completions without rewriting older history.
 - Make audited point adjustments that never reduce a total below zero.
+- Choose which Home Assistant users may adjust each child's points.
 - Optionally associate a child with a Home Assistant Person for card portraits.
 - Preserve stable identity when children or chores are renamed.
 
@@ -38,7 +39,7 @@ Development is AI-assisted.
 
 ## Configuration
 
-Open **Settings > Devices & services > Chores Manager > Configure** to manage children, chores, assignments, and the weekday that ends the chore week.
+Open **Settings > Devices & services > Chores Manager > Configure** to manage children, chores, assignments, point-adjustment access, and the weekday that ends the chore week.
 
 A child may optionally reference a Home Assistant Person. Compatible cards use that Person's existing profile image; Chores Manager stores only the entity ID, not the image.
 

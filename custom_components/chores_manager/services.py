@@ -16,6 +16,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     ATTR_ACTIVE,
+    ATTR_ADJUSTMENT_USER_IDS,
     ATTR_AMOUNT,
     ATTR_ASSIGNMENT_ID,
     ATTR_CATEGORY,
@@ -133,6 +134,14 @@ ADD_CHILD_SCHEMA = vol.Schema(
             None,
             vol.All(cv.entity_id, cv.entity_domain("person")),
         ),
+        vol.Optional(ATTR_ADJUSTMENT_USER_IDS): vol.Any(
+            None,
+            vol.All(
+                cv.ensure_list,
+                [vol.All(cv.string, str.strip, vol.Length(min=1))],
+                vol.Unique(),
+            ),
+        ),
     }
 )
 
@@ -151,6 +160,14 @@ UPDATE_CHILD_SCHEMA = vol.Schema(
         vol.Optional(ATTR_PERSON_ENTITY_ID): vol.Any(
             None,
             vol.All(cv.entity_id, cv.entity_domain("person")),
+        ),
+        vol.Optional(ATTR_ADJUSTMENT_USER_IDS): vol.Any(
+            None,
+            vol.All(
+                cv.ensure_list,
+                [vol.All(cv.string, str.strip, vol.Length(min=1))],
+                vol.Unique(),
+            ),
         ),
     }
 )
@@ -363,13 +380,19 @@ async def _async_require_points_control(
     if user.is_admin:
         return
 
+    entry = _get_loaded_entry(hass)
+    child = entry.runtime_data.data["children"].get(child_id)
+    allowed_user_ids = child.get(ATTR_ADJUSTMENT_USER_IDS) if child else None
+
     entity_id = er.async_get(hass).async_get_entity_id(
         SENSOR_DOMAIN,
         DOMAIN,
         f"{child_id}_weekly_points",
     )
-    if entity_id is None or not user.permissions.check_entity(
-        entity_id, POLICY_CONTROL
+    if (
+        entity_id is None
+        or (allowed_user_ids is not None and user.id not in allowed_user_ids)
+        or not user.permissions.check_entity(entity_id, POLICY_CONTROL)
     ):
         raise Unauthorized(
             context=call.context,
@@ -601,6 +624,7 @@ async def async_setup_services(
         await entry.runtime_data.async_add_child(
             name,
             call.data.get(ATTR_PERSON_ENTITY_ID),
+            call.data.get(ATTR_ADJUSTMENT_USER_IDS),
         )
 
     async def async_handle_update_child(call: ServiceCall) -> None:
@@ -608,17 +632,16 @@ async def async_setup_services(
         entry = _get_loaded_entry(hass)
 
         try:
+            metadata: dict[str, object] = {}
             if ATTR_PERSON_ENTITY_ID in call.data:
-                await entry.runtime_data.async_update_child(
-                    call.data[ATTR_CHILD_ID],
-                    call.data[ATTR_NAME],
-                    call.data[ATTR_PERSON_ENTITY_ID],
-                )
-            else:
-                await entry.runtime_data.async_update_child(
-                    call.data[ATTR_CHILD_ID],
-                    call.data[ATTR_NAME],
-                )
+                metadata[ATTR_PERSON_ENTITY_ID] = call.data[ATTR_PERSON_ENTITY_ID]
+            if ATTR_ADJUSTMENT_USER_IDS in call.data:
+                metadata[ATTR_ADJUSTMENT_USER_IDS] = call.data[ATTR_ADJUSTMENT_USER_IDS]
+            await entry.runtime_data.async_update_child(
+                call.data[ATTR_CHILD_ID],
+                call.data[ATTR_NAME],
+                **metadata,
+            )
         except UnknownChildError as err:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,

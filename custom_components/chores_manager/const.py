@@ -12,6 +12,7 @@ STORAGE_VERSION: Final = 1
 
 ATTR_CATEGORY: Final = "category"
 ATTR_ACTIVE: Final = "active"
+ATTR_ADJUSTMENT_USER_IDS: Final = "adjustment_user_ids"
 ATTR_AMOUNT: Final = "amount"
 ATTR_ASSIGNMENT_ID: Final = "assignment_id"
 ATTR_CHILD_ID: Final = "child_id"

@@ -270,6 +270,31 @@ async def test_adjustment_action_allows_non_admin_sensor_controller(
     assert _state(hass, WEEKLY_POINTS_SENSOR).state == "1"
 
 
+async def test_adjustment_action_rejects_controller_outside_child_allowlist(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+    hass_read_only_user: MockUser,
+) -> None:
+    """Test service actions enforce the configured child allowlist."""
+    await _call_action(
+        hass,
+        "add_child",
+        {"name": "Alex", "adjustment_user_ids": ["another-user"]},
+    )
+    hass_read_only_user.mock_policy({"entities": True})
+
+    with pytest.raises(Unauthorized):
+        await hass.services.async_call(
+            DOMAIN,
+            "increment_weekly_counter",
+            {"child_id": "kid_1", "amount": 1},
+            blocking=True,
+            context=Context(user_id=hass_read_only_user.id),
+        )
+
+    assert loaded_config_entry.runtime_data.data["adjustments"] == {}
+
+
 async def test_complete_assignment_updates_state_points_and_snapshot(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,
