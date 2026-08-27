@@ -7,18 +7,16 @@
 - [x] Native management for children, chores, assignments, categories, icons, and the reset-after weekday.
 - [x] Reversible activation and deliberate structural deletion while retaining immutable history.
 - [x] Administrator inventory and current-week correction contracts.
-- [x] Entity-authorized current/previous weekly totals and audited adjustments.
+- [x] Entity-authorized weekly totals and authenticated audited adjustments.
 - [x] Entity-authorized current-week history.
 - [x] Optional child-to-Person presentation metadata without image storage or authorization coupling.
 - [x] Automated validation and repeatable real Home Assistant acceptance.
 
-## Current release: 0.6.0
+## Current release: 0.7.0
 
-- [x] Implement and document the history contract.
-- [x] Implement and document child Person association.
-- [x] Coordinate the contracts with all four cards.
-- [x] Prepare version compatibility and release notes.
-- [ ] Apply the version bump, merge, and publish.
+- [x] Remove the caller-specific adjustment capability response.
+- [x] Allow authenticated Home Assistant users to adjust weekly points.
+- [x] Keep weekly-total reads and administrator commands separately protected.
 
 ## Later
 
