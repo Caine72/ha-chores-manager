@@ -304,7 +304,6 @@ async def test_weekly_points_returns_current_and_previous_totals(
         "child_name": "Alex",
         "person_entity_id": "person.alex",
         "points_entity_id": POINTS_SENSOR,
-        "can_adjust": False,
         "current_week": {
             "start": current_start.isoformat(),
             "end": current_end.isoformat(),
@@ -356,12 +355,6 @@ async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
     )
     hass_read_only_user.mock_policy({"entities": True})
 
-    totals_response = await _get_weekly_points(
-        hass, hass_ws_client, hass_read_only_access_token
-    )
-    assert totals_response["success"]
-    assert totals_response["result"]["can_adjust"] is True
-
     response = await _adjust_weekly_points(
         hass,
         hass_ws_client,
@@ -384,14 +377,16 @@ async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
     )
 
 
-async def test_adjust_weekly_points_rejects_read_only_user(
+async def test_adjust_weekly_points_allows_authenticated_user_without_entity_permission(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,
     hass_ws_client: WebSocketGenerator,
+    hass_read_only_user: MockUser,
     hass_read_only_access_token: str,
 ) -> None:
-    """Test reading a points sensor does not grant adjustment access."""
+    """Test an authenticated user can adjust without points-entity permission."""
     await _call_action(hass, "add_child", {"name": "Alex"})
+    hass_read_only_user.mock_policy({})
 
     response = await _adjust_weekly_points(
         hass,
@@ -400,9 +395,10 @@ async def test_adjust_weekly_points_rejects_read_only_user(
         hass_read_only_access_token,
     )
 
-    assert not response["success"]
-    assert response["error"]["code"] == "unauthorized"
-    assert loaded_config_entry.runtime_data.data["adjustments"] == {}
+    assert response["success"]
+    assert response["result"]["applied_amount"] == 1
+    assert response["result"]["current_points"] == 1
+    assert "adjustment_1" in loaded_config_entry.runtime_data.data["adjustments"]
 
 
 async def test_adjust_weekly_points_reports_clamped_decrement(

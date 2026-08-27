@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import voluptuous as vol
 
-from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
+from homeassistant.auth.permissions.const import POLICY_READ
 from homeassistant.components import websocket_api
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
@@ -98,15 +98,6 @@ def _require_points_permission(
             entity_id=entity_id,
             permission=permission,
         )
-
-
-def _has_points_permission(
-    connection: websocket_api.ActiveConnection,
-    entity_id: str,
-    permission: str,
-) -> bool:
-    """Return whether a connection has an entity permission."""
-    return connection.user.permissions.check_entity(entity_id, permission)
 
 
 def _build_weekly_points(
@@ -301,11 +292,6 @@ def websocket_weekly_points(
         return
 
     _require_points_permission(connection, result["points_entity_id"], POLICY_READ)
-    result["can_adjust"] = _has_points_permission(
-        connection,
-        result["points_entity_id"],
-        POLICY_CONTROL,
-    )
     connection.send_result(msg["id"], result)
 
 
@@ -372,7 +358,7 @@ async def websocket_adjust_weekly_points(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Make an authorized audited adjustment to current weekly points."""
+    """Make an audited adjustment to current weekly points."""
     entry = _get_loaded_entry(hass)
     if entry is None:
         connection.send_error(
@@ -392,7 +378,6 @@ async def websocket_adjust_weekly_points(
         )
         return
 
-    _require_points_permission(connection, entity_id, POLICY_CONTROL)
     previous_total = store.get_current_week_points(msg[ATTR_CHILD_ID])
 
     try:
