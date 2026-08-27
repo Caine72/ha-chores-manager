@@ -100,15 +100,6 @@ def _require_points_permission(
         )
 
 
-def _has_points_permission(
-    connection: websocket_api.ActiveConnection,
-    entity_id: str,
-    permission: str,
-) -> bool:
-    """Return whether a connection has an entity permission."""
-    return connection.user.permissions.check_entity(entity_id, permission)
-
-
 def _build_weekly_points(
     hass: HomeAssistant,
     store: ChoresManagerStore,
@@ -301,11 +292,6 @@ def websocket_weekly_points(
         return
 
     _require_points_permission(connection, result["points_entity_id"], POLICY_READ)
-    result["can_adjust"] = _has_points_permission(
-        connection,
-        result["points_entity_id"],
-        POLICY_CONTROL,
-    )
     connection.send_result(msg["id"], result)
 
 

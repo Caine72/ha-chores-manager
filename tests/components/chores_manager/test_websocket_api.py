@@ -304,7 +304,6 @@ async def test_weekly_points_returns_current_and_previous_totals(
         "child_name": "Alex",
         "person_entity_id": "person.alex",
         "points_entity_id": POINTS_SENSOR,
-        "can_adjust": False,
         "current_week": {
             "start": current_start.isoformat(),
             "end": current_end.isoformat(),
@@ -355,12 +354,6 @@ async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
         {"name": "Alex", "person_entity_id": "person.alex"},
     )
     hass_read_only_user.mock_policy({"entities": True})
-
-    totals_response = await _get_weekly_points(
-        hass, hass_ws_client, hass_read_only_access_token
-    )
-    assert totals_response["success"]
-    assert totals_response["result"]["can_adjust"] is True
 
     response = await _adjust_weekly_points(
         hass,
