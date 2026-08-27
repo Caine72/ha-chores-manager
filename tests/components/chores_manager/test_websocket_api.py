@@ -377,14 +377,16 @@ async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
     )
 
 
-async def test_adjust_weekly_points_rejects_read_only_user(
+async def test_adjust_weekly_points_allows_authenticated_user_without_entity_permission(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,
     hass_ws_client: WebSocketGenerator,
+    hass_read_only_user: MockUser,
     hass_read_only_access_token: str,
 ) -> None:
-    """Test reading a points sensor does not grant adjustment access."""
+    """Test an authenticated user can adjust without points-entity permission."""
     await _call_action(hass, "add_child", {"name": "Alex"})
+    hass_read_only_user.mock_policy({})
 
     response = await _adjust_weekly_points(
         hass,
@@ -393,9 +395,10 @@ async def test_adjust_weekly_points_rejects_read_only_user(
         hass_read_only_access_token,
     )
 
-    assert not response["success"]
-    assert response["error"]["code"] == "unauthorized"
-    assert loaded_config_entry.runtime_data.data["adjustments"] == {}
+    assert response["success"]
+    assert response["result"]["applied_amount"] == 1
+    assert response["result"]["current_points"] == 1
+    assert "adjustment_1" in loaded_config_entry.runtime_data.data["adjustments"]
 
 
 async def test_adjust_weekly_points_reports_clamped_decrement(

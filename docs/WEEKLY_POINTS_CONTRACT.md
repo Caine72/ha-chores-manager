@@ -44,10 +44,11 @@ Request:
 }
 ```
 
-The caller must have Home Assistant `control` permission for the child's weekly-points
-sensor. `amount` is a signed non-zero integer from `-100` through `100`; `reason` is
-optional, trimmed, and limited to 200 characters. Positive amounts increment and
-negative amounts decrement. Decrements clamp at zero.
+The caller must be an authenticated Home Assistant WebSocket user. The adjustment
+command does not require entity-level `control` permission. `amount` is a signed
+non-zero integer from `-100` through `100`; `reason` is optional, trimmed, and limited
+to 200 characters. Positive amounts increment and negative amounts decrement.
+Decrements clamp at zero.
 
 Zero is an invariant for every weekly total, not only manual adjustments. Removing a
 completion through a chore switch or the dated correction API also floors the total at
@@ -62,8 +63,10 @@ when decrementing a zero total.
 Every applied change is stored as an adjustment with timestamp, local date, child,
 point delta, and optional reason. Completion history is not rewritten.
 
-## Authorization boundary
+## Authentication and visibility
 
-Authorization is enforced by the backend against the resolved weekly-points entity.
-Hiding a card or control does not grant or remove access. Inventory and correction
-commands keep their separate administrator-only policies.
+Adjustment visibility is a frontend presentation rule. Hiding the control does not
+prevent an authenticated Home Assistant user from calling the adjustment command
+directly. Reading weekly totals still requires `read` permission for the resolved
+weekly-points entity. Inventory and correction commands keep their separate
+administrator-only policies.
