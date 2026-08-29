@@ -125,6 +125,15 @@ add_chore:
           step: 1
           mode: box
 
+    completion_mode:
+      required: false
+      example: shared
+      selector:
+        select:
+          options:
+            - independent
+            - shared
+
     child_ids:
       required: false
       example:
@@ -240,6 +249,15 @@ update_chore:
           min: 0
           step: 1
           mode: box
+
+    completion_mode:
+      required: false
+      example: shared
+      selector:
+        select:
+          options:
+            - independent
+            - shared
 
 set_child_active:
   fields:

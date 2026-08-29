@@ -11,6 +11,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     COMPLETION_MODE_INDEPENDENT,
+    COMPLETION_MODE_SHARED,
     DEFAULT_RESET_AFTER_WEEKDAY,
     HISTORY_RETENTION_DAYS,
     STORAGE_KEY,
@@ -349,6 +350,7 @@ class ChoresManagerStore:
         icon: str,
         sort_order: int | None = None,
         child_ids: list[str] | None = None,
+        completion_mode: str = COMPLETION_MODE_INDEPENDENT,
     ) -> tuple[str, list[str]]:
         """Add a reusable chore and assignments."""
         async with self._lock:
@@ -366,7 +368,7 @@ class ChoresManagerStore:
                 "sort_order": (
                     sort_order if sort_order is not None else chore_number * 10
                 ),
-                "completion_mode": COMPLETION_MODE_INDEPENDENT,
+                "completion_mode": completion_mode,
             }
             self.data["next_chore_id"] = chore_number + 1
 
@@ -608,6 +610,7 @@ class ChoresManagerStore:
         points: int | None = None,
         icon: str | None = None,
         sort_order: int | None = None,
+        completion_mode: str | None = None,
     ) -> bool:
         """Update editable chore metadata and return whether it changed."""
         async with self._lock:
@@ -623,6 +626,7 @@ class ChoresManagerStore:
                     points,
                     icon,
                     sort_order,
+                    completion_mode,
                 )
             ):
                 raise NoChoreUpdatesError
@@ -647,6 +651,13 @@ class ChoresManagerStore:
 
             if sort_order is not None and chore["sort_order"] != sort_order:
                 chore["sort_order"] = sort_order
+                changed = True
+
+            if (
+                completion_mode is not None
+                and chore["completion_mode"] != completion_mode
+            ):
+                chore["completion_mode"] = completion_mode
                 changed = True
 
             if not changed:
@@ -759,12 +770,10 @@ class ChoresManagerStore:
             if not week_start <= local_date <= today:
                 raise CorrectionDateOutsideCurrentWeekError(local_date)
 
-            completion_ids = [
-                completion_id
-                for completion_id, completion in self.data["completions"].items()
-                if completion["assignment_id"] == assignment_id
-                and completion["local_date"] == local_date.isoformat()
-            ]
+            completion_ids = self._get_completion_ids_for_occurrence(
+                assignment_id,
+                local_date.isoformat(),
+            )
 
             if not completed:
                 if not completion_ids:
@@ -817,12 +826,10 @@ class ChoresManagerStore:
     ) -> bool:
         """Remove today's completion for an assignment."""
         async with self._lock:
-            completion_ids = [
-                completion_id
-                for completion_id, completion in self.data["completions"].items()
-                if completion["assignment_id"] == assignment_id
-                and completion["local_date"] == dt_util.now().date().isoformat()
-            ]
+            completion_ids = self._get_completion_ids_for_occurrence(
+                assignment_id,
+                dt_util.now().date().isoformat(),
+            )
 
             if not completion_ids:
                 return False
@@ -847,6 +854,16 @@ class ChoresManagerStore:
         """Return whether an assignment is completed today."""
         return self._get_today_completion_id(assignment_id) is not None
 
+    def get_assignment_completion_today(
+        self,
+        assignment_id: str,
+    ) -> CompletionData | None:
+        """Return today's completion for an assignment occurrence."""
+        completion_id = self._get_today_completion_id(assignment_id)
+        if completion_id is None:
+            return None
+        return self.data["completions"][completion_id]
+
     def _delete_assignment_data(
         self,
         assignment_id: str,
@@ -869,14 +886,33 @@ class ChoresManagerStore:
         today = dt_util.now().date().isoformat()
 
         return next(
-            (
-                completion_id
-                for completion_id, completion in self.data["completions"].items()
-                if completion["assignment_id"] == assignment_id
-                and completion["local_date"] == today
-            ),
+            iter(self._get_completion_ids_for_occurrence(assignment_id, today)),
             None,
         )
+
+    def _get_completion_ids_for_occurrence(
+        self,
+        assignment_id: str,
+        local_date: str,
+    ) -> list[str]:
+        """Return completion IDs belonging to one assignment occurrence."""
+        assignment = self.data["assignments"].get(assignment_id)
+        chore_id = assignment["chore_id"] if assignment is not None else None
+        shared = (
+            chore_id is not None
+            and self.data["chores"][chore_id]["completion_mode"]
+            == COMPLETION_MODE_SHARED
+        )
+        return [
+            completion_id
+            for completion_id, completion in self.data["completions"].items()
+            if completion["local_date"] == local_date
+            and (
+                completion["chore_id"] == chore_id
+                if shared
+                else completion["assignment_id"] == assignment_id
+            )
+        ]
 
     def get_current_week_bounds(
         self,

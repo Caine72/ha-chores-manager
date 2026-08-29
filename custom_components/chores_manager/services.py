@@ -23,6 +23,7 @@ from .const import (
     ATTR_CHILD_IDS,
     ATTR_CHORE_ID,
     ATTR_CHORE_IDS,
+    ATTR_COMPLETION_MODE,
     ATTR_ICON,
     ATTR_NAME,
     ATTR_PERSON_ENTITY_ID,
@@ -30,6 +31,8 @@ from .const import (
     ATTR_REASON,
     ATTR_SORT_ORDER,
     ATTR_TITLE,
+    COMPLETION_MODE_INDEPENDENT,
+    COMPLETION_MODES,
     DEFAULT_CHORE_ICON,
     DOMAIN,
     SERVICE_ADD_ASSIGNMENT,
@@ -179,6 +182,10 @@ ADD_CHORE_SCHEMA = vol.Schema(
             vol.Coerce(int),
             vol.Range(min=0),
         ),
+        vol.Optional(
+            ATTR_COMPLETION_MODE,
+            default=COMPLETION_MODE_INDEPENDENT,
+        ): vol.In(COMPLETION_MODES),
         vol.Optional(ATTR_CHILD_IDS): vol.All(
             cv.ensure_list,
             [
@@ -271,6 +278,7 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
             vol.Coerce(int),
             vol.Range(min=0),
         ),
+        vol.Optional(ATTR_COMPLETION_MODE): vol.In(COMPLETION_MODES),
     }
 )
 
@@ -640,6 +648,7 @@ async def async_setup_services(
                 icon=call.data[ATTR_ICON],
                 sort_order=call.data.get(ATTR_SORT_ORDER),
                 child_ids=call.data.get(ATTR_CHILD_IDS),
+                completion_mode=call.data[ATTR_COMPLETION_MODE],
             )
         except NoActiveChildrenError as err:
             raise ServiceValidationError(
@@ -711,6 +720,7 @@ async def async_setup_services(
                 points=call.data.get(ATTR_POINTS),
                 icon=call.data.get(ATTR_ICON),
                 sort_order=call.data.get(ATTR_SORT_ORDER),
+                completion_mode=call.data.get(ATTR_COMPLETION_MODE),
             )
         except NoChoreUpdatesError as err:
             raise ServiceValidationError(

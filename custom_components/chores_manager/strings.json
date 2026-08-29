@@ -103,6 +103,10 @@
         "child_ids": {
           "name": "Children",
           "description": "Child IDs to assign. When omitted, all active children are assigned."
+        },
+        "completion_mode": {
+          "name": "Completion mode",
+          "description": "Independent awards each child separately. Shared allows the first assigned child to claim one daily occurrence."
         }
       }
     },
@@ -191,6 +195,10 @@
         "sort_order": {
           "name": "Sort order",
           "description": "A new display order for the chore."
+        },
+        "completion_mode": {
+          "name": "Completion mode",
+          "description": "Whether assigned children complete this chore independently or share one daily occurrence."
         }
       }
     },

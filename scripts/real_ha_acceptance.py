@@ -483,6 +483,21 @@ def run_acceptance(
         domain="chores_manager",
         service="add_chore",
         data={
+            "title": f"Feed cats shared {run_stamp}",
+            "category": "Pets",
+            "points": 4,
+            "icon": "mdi:cat",
+            "sort_order": 30,
+            "completion_mode": "shared",
+            "child_ids": [alex_id, blake_id],
+        },
+    )
+    call_service(
+        base_url=base_url,
+        token=token,
+        domain="chores_manager",
+        service="add_chore",
+        data={
             "title": f"Feed plants {run_stamp}",
             "category": "Evening",
             "points": 3,
@@ -501,7 +516,99 @@ def run_acceptance(
     chore_by_title = {data["chores"][chore_id]["title"]: chore_id for chore_id in tracked_chores}
     bed_chore_id = chore_by_title[f"Make bed {run_stamp}"]
     plants_chore_id = chore_by_title[f"Feed plants {run_stamp}"]
-    tracked_ids.update({"bed_chore": bed_chore_id, "plants_chore": plants_chore_id})
+    shared_chore_id = chore_by_title[f"Feed cats shared {run_stamp}"]
+    tracked_ids.update(
+        {
+            "bed_chore": bed_chore_id,
+            "plants_chore": plants_chore_id,
+            "shared_chore": shared_chore_id,
+        }
+    )
+
+    assignment_by_pair = {
+        (assignment["child_id"], assignment["chore_id"]): assignment_id
+        for assignment_id, assignment in data["assignments"].items()
+    }
+    alex_shared_assignment = assignment_by_pair[(alex_id, shared_chore_id)]
+    blake_shared_assignment = assignment_by_pair[(blake_id, shared_chore_id)]
+    alex_shared_switch = f"switch.{alex_id}_{shared_chore_id}"
+    blake_shared_switch = f"switch.{blake_id}_{shared_chore_id}"
+    tracked_ids.update(
+        {
+            "alex_shared_assignment": alex_shared_assignment,
+            "blake_shared_assignment": blake_shared_assignment,
+        }
+    )
+    tracked_entity_ids.extend([alex_shared_switch, blake_shared_switch])
+
+    call_service(
+        base_url=base_url,
+        token=token,
+        domain="switch",
+        service="turn_on",
+        data={"entity_id": alex_shared_switch},
+    )
+    wait_until(
+        "shared chore claim",
+        lambda: get_states(base_url=base_url, token=token).get(alex_shared_switch, {}).get("state") == "on"
+        and get_states(base_url=base_url, token=token).get(blake_shared_switch, {}).get("state") == "on",
+    )
+    states = get_states(base_url=base_url, token=token)
+    assert_equal(
+        states[alex_shared_switch]["attributes"]["completed_by_child_id"],
+        alex_id,
+        "shared chore did not attribute the completion to the claiming child",
+    )
+    assert_equal(
+        states[blake_shared_switch]["attributes"]["completed_by_child_id"],
+        alex_id,
+        "shared sibling switch did not expose the claiming child",
+    )
+
+    call_service(
+        base_url=base_url,
+        token=token,
+        domain="switch",
+        service="turn_on",
+        data={"entity_id": blake_shared_switch},
+    )
+    shared_completions = [
+        completion
+        for completion in storage_data()["completions"].values()
+        if completion["chore_id"] == shared_chore_id
+    ]
+    assert_equal(len(shared_completions), 1, "shared chore stored more than one daily completion")
+    assert_equal(
+        shared_completions[0]["child_id"],
+        alex_id,
+        "second shared claim replaced the original child",
+    )
+    snapshots.append(snapshot("claim shared chore once", tracked_entity_ids, tracked_ids))
+
+    call_service(
+        base_url=base_url,
+        token=token,
+        domain="switch",
+        service="turn_off",
+        data={"entity_id": blake_shared_switch},
+    )
+    wait_until(
+        "shared chore reset",
+        lambda: get_states(base_url=base_url, token=token).get(alex_shared_switch, {}).get("state") == "off"
+        and get_states(base_url=base_url, token=token).get(blake_shared_switch, {}).get("state") == "off",
+    )
+    call_service(
+        base_url=base_url,
+        token=token,
+        domain="chores_manager",
+        service="delete_chore",
+        data={"chore_id": shared_chore_id},
+    )
+    wait_until(
+        "shared chore cleanup",
+        lambda: get_states(base_url=base_url, token=token).get(alex_shared_switch) is None
+        and get_states(base_url=base_url, token=token).get(blake_shared_switch) is None,
+    )
 
     blake_bed_switch = f"switch.{blake_id}_{bed_chore_id}"
     blake_plants_switch = f"switch.{blake_id}_{plants_chore_id}"
