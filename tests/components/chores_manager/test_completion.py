@@ -71,6 +71,94 @@ async def _create_assignment(hass: HomeAssistant) -> None:
     )
 
 
+async def _create_shared_assignment(hass: HomeAssistant) -> None:
+    """Create two children assigned to one shared chore."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(hass, "add_child", {"name": "Isabelle"})
+    await _call_action(
+        hass,
+        "add_chore",
+        {
+            "title": "Feed the cats - morning",
+            "category": "Cats",
+            "points": 2,
+            "icon": "mdi:cat",
+            "completion_mode": "shared",
+        },
+    )
+
+
+async def test_shared_chore_is_claimed_once_and_can_be_reset_by_either_child(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test one child claims a shared daily occurrence for all assignments."""
+    await _create_shared_assignment(hass)
+    alex_switch = "switch.kid_1_chore_1"
+    isabelle_switch = "switch.kid_2_chore_1"
+
+    await _call_switch_action(hass, "turn_on", alex_switch)
+
+    store = loaded_config_entry.runtime_data
+    assert _state(hass, alex_switch).state == "on"
+    assert _state(hass, isabelle_switch).state == "on"
+    assert _state(hass, alex_switch).attributes["completed_by_child_id"] == "kid_1"
+    assert _state(hass, isabelle_switch).attributes["completed_by_child_name"] == (
+        "Alex"
+    )
+    assert _state(hass, "sensor.kid_1_weekly_points").state == "2"
+    assert _state(hass, "sensor.kid_2_weekly_points").state == "0"
+    assert len(store.data["completions"]) == 1
+
+    await _call_switch_action(hass, "turn_on", isabelle_switch)
+
+    assert len(store.data["completions"]) == 1
+    assert store.data["completions"]["completion_1"]["child_id"] == "kid_1"
+
+    await _call_switch_action(hass, "turn_off", isabelle_switch)
+
+    assert _state(hass, alex_switch).state == "off"
+    assert _state(hass, isabelle_switch).state == "off"
+    assert "completed_by_child_id" not in _state(hass, alex_switch).attributes
+    assert store.data["completions"] == {}
+
+
+async def test_shared_chore_correction_uses_the_same_daily_occurrence(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test dated correction cannot create two shared completions."""
+    await _create_shared_assignment(hass)
+    store = loaded_config_entry.runtime_data
+    today = dt_util.now().date()
+
+    first_id, first_changed = await store.async_set_current_week_completion(
+        "assignment_1",
+        today,
+        True,
+    )
+    second_id, second_changed = await store.async_set_current_week_completion(
+        "assignment_2",
+        today,
+        True,
+    )
+
+    assert first_id == second_id == "completion_1"
+    assert first_changed is True
+    assert second_changed is False
+    assert len(store.data["completions"]) == 1
+
+    removed_id, removed_changed = await store.async_set_current_week_completion(
+        "assignment_2",
+        today,
+        False,
+    )
+
+    assert removed_id is None
+    assert removed_changed is True
+    assert store.data["completions"] == {}
+
+
 @pytest.mark.usefixtures("loaded_config_entry")
 async def test_weekly_points_sensor_is_unitless(
     hass: HomeAssistant,

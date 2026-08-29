@@ -137,6 +137,17 @@ class ChoreAssignmentSwitch(SwitchEntity):
         }
         if person_entity_id := child.get("person_entity_id"):
             attributes["person_entity_id"] = person_entity_id
+        if completion := self._store.get_assignment_completion_today(
+            self._assignment_id
+        ):
+            attributes.update(
+                {
+                    "completed_at": completion["completed_at"],
+                    "completed_by_child_id": completion["child_id"],
+                    "completed_by_child_name": completion["child_name"],
+                    "completion_assignment_id": completion["assignment_id"],
+                }
+            )
         return attributes
 
     async def async_added_to_hass(self) -> None:

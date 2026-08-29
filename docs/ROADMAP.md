@@ -11,12 +11,14 @@
 - [x] Entity-authorized current-week history.
 - [x] Optional child-to-Person presentation metadata without image storage or authorization coupling.
 - [x] Automated validation and repeatable real Home Assistant acceptance.
+- [x] Shared daily chores claimed once by one assigned child.
 
-## Current release: 0.7.0
+## Current release: 0.8.0
 
-- [x] Remove the caller-specific adjustment capability response.
-- [x] Allow authenticated Home Assistant users to adjust weekly points.
-- [x] Keep weekly-total reads and administrator commands separately protected.
+- [x] Add shared completion mode for chores assigned to multiple children.
+- [x] Attribute the shared completion and points to the child who claims it.
+- [x] Synchronize shared assignment switches and expose claimant metadata.
+- [x] Cover shared completion through switches, dated correction, and real Home Assistant acceptance.
 
 ## Later
 

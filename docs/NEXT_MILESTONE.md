@@ -1,11 +1,13 @@
-# Current milestone: 0.7.0 adjustment contract
+# Current milestone: 0.8.0 shared chores
 
-This release simplifies the overview adjustment contract.
+This release adds one daily chore occurrence shared by all assigned children.
 
 ## Scope
 
-- remove `can_adjust` from weekly-points responses;
-- accept adjustments from authenticated Home Assistant users;
-- retain `read` permission for totals and administrator-only correction commands.
+- let the first assigned child claim a shared chore for the day;
+- award points and immutable completion history only to the claiming child;
+- synchronize all assignment switches for the shared chore;
+- expose completion attribution for dashboards and automations;
+- preserve independent completion as the default for existing and new chores.
 
-See [the release notes](RELEASE_0.7.0.md).
+See [the release notes](RELEASE_0.8.0.md).

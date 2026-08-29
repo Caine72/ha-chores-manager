@@ -129,6 +129,7 @@ async def test_update_chore_updates_all_editable_fields(
             "points": 5,
             "icon": "mdi:broom",
             "sort_order": 25,
+            "completion_mode": "shared",
         },
     )
 
@@ -140,7 +141,7 @@ async def test_update_chore_updates_all_editable_fields(
         "icon": "mdi:broom",
         "active": True,
         "sort_order": 25,
-        "completion_mode": "independent",
+        "completion_mode": "shared",
     }
 
     state = _state(hass, ALEX_SWITCH)
@@ -149,6 +150,7 @@ async def test_update_chore_updates_all_editable_fields(
     assert state.attributes["category"] == "Cleaning"
     assert state.attributes["points"] == 5
     assert state.attributes["sort_order"] == 25
+    assert state.attributes["completion_mode"] == "shared"
     assert state.attributes["icon"] == "mdi:broom"
 
 

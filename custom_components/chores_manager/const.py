@@ -18,6 +18,7 @@ ATTR_CHILD_ID: Final = "child_id"
 ATTR_CHILD_IDS: Final = "child_ids"
 ATTR_CHORE_ID: Final = "chore_id"
 ATTR_CHORE_IDS: Final = "chore_ids"
+ATTR_COMPLETION_MODE: Final = "completion_mode"
 ATTR_ICON: Final = "icon"
 ATTR_NAME: Final = "name"
 ATTR_PERSON_ENTITY_ID: Final = "person_entity_id"
@@ -28,6 +29,11 @@ ATTR_TITLE: Final = "title"
 CONF_RESET_AFTER_WEEKDAY: Final = "reset_after_weekday"
 
 COMPLETION_MODE_INDEPENDENT: Final = "independent"
+COMPLETION_MODE_SHARED: Final = "shared"
+COMPLETION_MODES: Final = (
+    COMPLETION_MODE_INDEPENDENT,
+    COMPLETION_MODE_SHARED,
+)
 
 DEFAULT_CHORE_ICON: Final = "mdi:checkbox-marked-circle-outline"
 

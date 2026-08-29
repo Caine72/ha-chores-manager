@@ -18,12 +18,15 @@ from .const import (
     ATTR_CHILD_IDS,
     ATTR_CHORE_ID,
     ATTR_CHORE_IDS,
+    ATTR_COMPLETION_MODE,
     ATTR_ICON,
     ATTR_NAME,
     ATTR_PERSON_ENTITY_ID,
     ATTR_POINTS,
     ATTR_SORT_ORDER,
     ATTR_TITLE,
+    COMPLETION_MODE_INDEPENDENT,
+    COMPLETION_MODE_SHARED,
     CONF_RESET_AFTER_WEEKDAY,
     DEFAULT_CHORE_ICON,
     DEFAULT_RESET_AFTER_WEEKDAY,
@@ -1230,6 +1233,27 @@ class ChoresManagerOptionsFlow(OptionsFlow):
     def _advanced_chore_schema(defaults: dict[str, Any]) -> vol.Schema:
         """Build the advanced chore fields schema."""
         schema: dict[object, object] = {
+            vol.Required(
+                ATTR_COMPLETION_MODE,
+                default=defaults.get(
+                    ATTR_COMPLETION_MODE,
+                    COMPLETION_MODE_INDEPENDENT,
+                ),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(
+                            value=COMPLETION_MODE_INDEPENDENT,
+                            label="Independent per child",
+                        ),
+                        selector.SelectOptionDict(
+                            value=COMPLETION_MODE_SHARED,
+                            label="Shared between assigned children",
+                        ),
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
             vol.Required(
                 ATTR_ICON,
                 default=defaults.get(ATTR_ICON, DEFAULT_CHORE_ICON),

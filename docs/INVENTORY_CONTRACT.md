@@ -71,3 +71,13 @@ The command is admin-only. If Chores Manager does not have exactly one loaded co
   consumers must not calculate a fixed weekday boundary.
 - Mutations remain in existing Home Assistant actions.
 - Consumers should refresh inventory after mutations; this contract does not provide a subscription.
+
+## Completion modes
+
+An `independent` chore has a separate daily occurrence for every assignment. A
+`shared` chore has one daily occurrence across all of its assignments. The first
+assigned child to turn on their switch owns the immutable completion snapshot and
+receives the points. All assignment switches for that chore then report `on` and
+expose `completed_at`, `completed_by_child_id`, `completed_by_child_name`, and
+`completion_assignment_id`. Turning off any of those switches removes the shared
+occurrence.
