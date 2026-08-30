@@ -777,7 +777,7 @@ class ChoresManagerStore:
             if not assignment_ids:
                 raise ValueError(f"Shared chore {chore_id} has no active assignments")
 
-            assignment_id = sorted(assignment_ids)[0]
+            assignment_id = min(assignment_ids)
             existing_completion_id = self._get_today_completion_id(assignment_id)
             if existing_completion_id is not None:
                 return existing_completion_id
