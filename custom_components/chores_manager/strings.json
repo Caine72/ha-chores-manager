@@ -8,6 +8,26 @@
     }
   },
   "services": {
+    "complete_chore_manually": {
+      "name": "Complete shared chore manually",
+      "description": "Marks today's shared chore complete without awarding points to a child.",
+      "fields": {
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "The stable ID of the shared chore to complete manually."
+        }
+      }
+    },
+    "reset_manual_chore_completion": {
+      "name": "Reset manual shared chore completion",
+      "description": "Removes today's manual completion for a shared chore.",
+      "fields": {
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "The stable ID of the shared chore whose manual completion should be removed."
+        }
+      }
+    },
     "increment_weekly_counter": {
       "name": "Increment weekly counter",
       "description": "Adds points to a child's current weekly counter.",

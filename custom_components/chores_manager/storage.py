@@ -75,14 +75,15 @@ class CompletionData(TypedDict):
     completed_at: str
     local_date: str
 
-    child_id: str
+    child_id: str | None
     chore_id: str
     assignment_id: str
 
-    child_name: str
+    child_name: str | None
     chore_title: str
     category: str
     points: int
+    completed_manually: NotRequired[bool]
 
 
 class AdjustmentData(TypedDict):
@@ -757,6 +758,69 @@ class ChoresManagerStore:
 
         return completion_id
 
+    async def async_complete_chore_manually(self, chore_id: str) -> str:
+        """Complete today's shared chore without awarding points to a child."""
+        async with self._lock:
+            chore = self.data["chores"].get(chore_id)
+            if chore is None:
+                raise UnknownChoreError(chore_id)
+            if chore["completion_mode"] != COMPLETION_MODE_SHARED:
+                raise ValueError(f"Chore {chore_id} is not shared")
+            if not chore["active"]:
+                raise ValueError(f"Chore {chore_id} is inactive")
+
+            assignment_ids = [
+                assignment_id
+                for assignment_id, assignment in self.data["assignments"].items()
+                if assignment["chore_id"] == chore_id and assignment["active"]
+            ]
+            if not assignment_ids:
+                raise ValueError(f"Shared chore {chore_id} has no active assignments")
+
+            assignment_id = sorted(assignment_ids)[0]
+            existing_completion_id = self._get_today_completion_id(assignment_id)
+            if existing_completion_id is not None:
+                return existing_completion_id
+
+            completion_number = self.data["next_completion_id"]
+            completion_id = f"completion_{completion_number}"
+            self.data["completions"][completion_id] = {
+                "completed_at": dt_util.utcnow().isoformat(),
+                "local_date": dt_util.now().date().isoformat(),
+                "child_id": None,
+                "chore_id": chore_id,
+                "assignment_id": assignment_id,
+                "child_name": None,
+                "chore_title": chore["title"],
+                "category": chore["category"],
+                "points": 0,
+                "completed_manually": True,
+            }
+            self.data["next_completion_id"] = completion_number + 1
+            await self.async_save()
+
+        return completion_id
+
+    async def async_reset_manual_chore_completion(self, chore_id: str) -> bool:
+        """Remove today's manual shared completion without affecting a claim."""
+        async with self._lock:
+            if chore_id not in self.data["chores"]:
+                raise UnknownChoreError(chore_id)
+            completion_ids = [
+                completion_id
+                for completion_id, completion in self.data["completions"].items()
+                if completion["chore_id"] == chore_id
+                and completion["local_date"] == dt_util.now().date().isoformat()
+                and completion.get("completed_manually") is True
+            ]
+            if not completion_ids:
+                return False
+            for completion_id in completion_ids:
+                del self.data["completions"][completion_id]
+            await self.async_save()
+
+        return True
+
     async def async_set_current_week_completion(
         self,
         assignment_id: str,
@@ -786,7 +850,8 @@ class ChoresManagerStore:
                 for completion_id in completion_ids:
                     del self.data["completions"][completion_id]
                 for child_id in child_ids:
-                    self._floor_current_week_points_at_zero(child_id)
+                    if child_id is not None:
+                        self._floor_current_week_points_at_zero(child_id)
 
                 await self.async_save()
                 return None, True
@@ -841,7 +906,8 @@ class ChoresManagerStore:
             for completion_id in completion_ids:
                 del self.data["completions"][completion_id]
             for child_id in child_ids:
-                self._floor_current_week_points_at_zero(child_id)
+                if child_id is not None:
+                    self._floor_current_week_points_at_zero(child_id)
 
             await self.async_save()
 

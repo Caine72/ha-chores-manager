@@ -143,11 +143,18 @@ class ChoreAssignmentSwitch(SwitchEntity):
             attributes.update(
                 {
                     "completed_at": completion["completed_at"],
-                    "completed_by_child_id": completion["child_id"],
-                    "completed_by_child_name": completion["child_name"],
                     "completion_assignment_id": completion["assignment_id"],
                 }
             )
+            if completion.get("completed_manually"):
+                attributes["completed_manually"] = True
+            else:
+                attributes.update(
+                    {
+                        "completed_by_child_id": completion["child_id"],
+                        "completed_by_child_name": completion["child_name"],
+                    }
+                )
         return attributes
 
     async def async_added_to_hass(self) -> None:

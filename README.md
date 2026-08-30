@@ -64,6 +64,10 @@ The chore week follows Home Assistant local time and ends after the configured w
 
 Turning an assignment switch on completes that chore for today; turning it off removes today's completion. Completion records retain the child name, chore title, category, and points from the time they were created. Later edits do not rewrite those snapshots.
 
+Shared chores can also be completed manually for the household without assigning
+the occurrence or points to a child. Manual occurrences synchronize all related
+assignment switches and can be reset independently through Home Assistant actions.
+
 Weekly totals combine completion points with audited manual adjustments. Subtraction is clamped at zero. Current and previous chore-week data are retained in a rolling history window.
 
 Deactivation is reversible. Structural deletion removes the related live entities while retained completion snapshots remain available until normal pruning.
