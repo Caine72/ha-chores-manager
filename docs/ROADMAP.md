@@ -13,12 +13,12 @@
 - [x] Automated validation and repeatable real Home Assistant acceptance.
 - [x] Shared daily chores claimed once by one assigned child.
 
-## Current release: 0.8.0
+## Current release: 0.9.0
 
-- [x] Add shared completion mode for chores assigned to multiple children.
-- [x] Attribute the shared completion and points to the child who claims it.
-- [x] Synchronize shared assignment switches and expose claimant metadata.
-- [x] Cover shared completion through switches, dated correction, and real Home Assistant acceptance.
+- [x] Complete a shared chore manually without assigning it to a child.
+- [x] Award no points for a manual household completion.
+- [x] Synchronize manual state across every related assignment switch.
+- [x] Reset manual completion independently from child claims.
 
 ## Later
 

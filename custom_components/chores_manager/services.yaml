@@ -1,3 +1,19 @@
+complete_chore_manually:
+  fields:
+    chore_id:
+      required: true
+      example: chore_1
+      selector:
+        text:
+
+reset_manual_chore_completion:
+  fields:
+    chore_id:
+      required: true
+      example: chore_1
+      selector:
+        text:
+
 increment_weekly_counter:
   fields:
     child_id:

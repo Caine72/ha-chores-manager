@@ -39,12 +39,14 @@ from .const import (
     SERVICE_ADD_CHILD,
     SERVICE_ADD_CHORE,
     SERVICE_ASSIGN_CHORES_TO_CHILD,
+    SERVICE_COMPLETE_CHORE_MANUALLY,
     SERVICE_DECREMENT_WEEKLY_COUNTER,
     SERVICE_DELETE_ASSIGNMENT,
     SERVICE_DELETE_CHILD,
     SERVICE_DELETE_CHORE,
     SERVICE_INCREMENT_WEEKLY_COUNTER,
     SERVICE_REMOVE_CHORES_FROM_CHILD,
+    SERVICE_RESET_MANUAL_CHORE_COMPLETION,
     SERVICE_SET_ASSIGNMENT_ACTIVE,
     SERVICE_SET_CHILD_ACTIVE,
     SERVICE_SET_CHORE_ACTIVE,
@@ -221,6 +223,16 @@ DELETE_CHILD_SCHEMA = vol.Schema(
 )
 
 DELETE_CHORE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CHORE_ID): vol.All(
+            cv.string,
+            str.strip,
+            vol.Length(min=1),
+        ),
+    }
+)
+
+MANUAL_CHORE_COMPLETION_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_CHORE_ID): vol.All(
             cv.string,
@@ -543,6 +555,42 @@ async def _async_handle_remove_chores_from_child(
     _async_remove_assignment_registry_entries(hass, assignment_ids)
 
 
+async def _async_handle_complete_chore_manually(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> None:
+    """Handle a zero-point manual completion for a shared chore."""
+    entry = _get_loaded_entry(hass)
+    try:
+        await entry.runtime_data.async_complete_chore_manually(call.data[ATTR_CHORE_ID])
+    except UnknownChoreError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_chore",
+            translation_placeholders={"chore_id": err.chore_id},
+        ) from err
+    except ValueError as err:
+        raise ServiceValidationError(str(err)) from err
+
+
+async def _async_handle_reset_manual_chore_completion(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> None:
+    """Handle reset of a zero-point manual completion."""
+    entry = _get_loaded_entry(hass)
+    try:
+        await entry.runtime_data.async_reset_manual_chore_completion(
+            call.data[ATTR_CHORE_ID]
+        )
+    except UnknownChoreError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_chore",
+            translation_placeholders={"chore_id": err.chore_id},
+        ) from err
+
+
 async def async_setup_services(
     hass: HomeAssistant,
     config: ConfigType,
@@ -801,6 +849,20 @@ async def async_setup_services(
         SERVICE_ADD_CHORE,
         async_handle_add_chore,
         schema=ADD_CHORE_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_COMPLETE_CHORE_MANUALLY,
+        partial(_async_handle_complete_chore_manually, hass),
+        schema=MANUAL_CHORE_COMPLETION_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESET_MANUAL_CHORE_COMPLETION,
+        partial(_async_handle_reset_manual_chore_completion, hass),
+        schema=MANUAL_CHORE_COMPLETION_SCHEMA,
     )
 
     hass.services.async_register(

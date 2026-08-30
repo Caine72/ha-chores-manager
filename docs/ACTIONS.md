@@ -17,9 +17,15 @@ Actions are available under the `chores_manager` domain.
 | `remove_chores_from_child` | `child_id`, `chore_ids` | none | Atomically removes multiple assignments while preserving history. |
 | `set_assignment_active` | `assignment_id`, `active` | none | Deactivates or reactivates an assignment. |
 | `delete_assignment` | `assignment_id` | none | Deletes an assignment and its registry entry while preserving history. |
+| `complete_chore_manually` | `chore_id` | none | Completes today's shared chore without assigning a child or awarding points. |
+| `reset_manual_chore_completion` | `chore_id` | none | Removes today's manual completion without removing a child claim. |
 | `increment_weekly_counter` | `child_id` | `amount`, `reason` | Adds `1-100` points to the current chore week. |
 | `decrement_weekly_counter` | `child_id` | `amount`, `reason` | Subtracts `1-100` points without allowing the total below zero. |
 
 Names, titles, and categories are trimmed and limited to 100 characters. Points and adjustment amounts are limited to `1-100`; sort order must be non-negative; icons use Home Assistant's icon format.
 
 User-originated weekly-counter calls require `control` permission for the child's weekly-points sensor. Trusted internal calls without a user context remain available to automations.
+
+Manual completion accepts active shared chores with at least one active assignment.
+It creates one zero-point daily occurrence and exposes `completed_manually` on
+every synchronized assignment switch. Repeating either manual action is safe.

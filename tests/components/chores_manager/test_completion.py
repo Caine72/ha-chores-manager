@@ -159,6 +159,48 @@ async def test_shared_chore_correction_uses_the_same_daily_occurrence(
     assert store.data["completions"] == {}
 
 
+async def test_manual_shared_completion_locks_all_children_without_points_and_resets(
+    hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
+) -> None:
+    """Test a manual shared completion is distinct from a child claim."""
+    await _create_shared_assignment(hass)
+
+    await _call_action(
+        hass,
+        "complete_chore_manually",
+        {"chore_id": "chore_1"},
+    )
+
+    store = loaded_config_entry.runtime_data
+    alex_switch = _state(hass, "switch.kid_1_chore_1")
+    isabelle_switch = _state(hass, "switch.kid_2_chore_1")
+    assert alex_switch.state == isabelle_switch.state == "on"
+    assert alex_switch.attributes["completed_manually"] is True
+    assert "completed_by_child_id" not in alex_switch.attributes
+    assert _state(hass, "sensor.kid_1_weekly_points").state == "0"
+    assert _state(hass, "sensor.kid_2_weekly_points").state == "0"
+    assert store.data["completions"]["completion_1"]["points"] == 0
+    assert store.data["completions"]["completion_1"]["child_id"] is None
+
+    await _call_switch_action(hass, "turn_on", "switch.kid_1_chore_1")
+
+    assert len(store.data["completions"]) == 1
+    assert store.data["completions"]["completion_1"]["completed_manually"] is True
+    assert store.data["completions"]["completion_1"]["child_id"] is None
+    assert _state(hass, "sensor.kid_1_weekly_points").state == "0"
+
+    await _call_action(
+        hass,
+        "reset_manual_chore_completion",
+        {"chore_id": "chore_1"},
+    )
+
+    assert _state(hass, "switch.kid_1_chore_1").state == "off"
+    assert _state(hass, "switch.kid_2_chore_1").state == "off"
+    assert store.data["completions"] == {}
+
+
 @pytest.mark.usefixtures("loaded_config_entry")
 async def test_weekly_points_sensor_is_unitless(
     hass: HomeAssistant,
