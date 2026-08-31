@@ -34,7 +34,7 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 1. Start from the repository root, inspect `git status`, switch to `main`, and run `git pull origin main` before creating a development branch.
 2. Do all development work on a separate branch. Bring changes back to `main` only after validation scripts pass and the user explicitly approves.
 3. When publishing to `origin`, always push a branch and open a pull request, even when direct pushes to `main` are technically allowed.
-4. Read `docs/ROADMAP.md` and `docs/NEXT_MILESTONE.md` before starting a milestone.
+4. Read `docs/ROADMAP.md` before starting a milestone.
 5. For non-trivial changes, inspect relevant Home Assistant Core implementations and tests, then present a concise plan before coding.
 6. Preserve familiar structure and make the smallest change that fully satisfies the milestone.
 7. Add focused tests in the same change as production behavior.
@@ -60,4 +60,5 @@ Chores Manager is a private-use Home Assistant custom integration being prepared
 
 ## Current direction
 
-The next milestone is the backend inventory contract described in `docs/NEXT_MILESTONE.md`. Compare Home Assistant transport options before choosing an interface. Do not build the custom card in this repository; it will live in a separate repository linked later.
+Use `docs/ROADMAP.md` for future product direction. Keep custom-card work in the
+separate Chores Manager Cards repository.
