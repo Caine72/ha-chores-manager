@@ -14,7 +14,7 @@ Request:
 }
 ```
 
-The command is admin-only. If Chores Manager does not have exactly one loaded config entry, the command returns a WebSocket `not_found` error.
+The command is available to every authenticated Home Assistant user. If Chores Manager does not have exactly one loaded config entry, the command returns a WebSocket `not_found` error.
 
 ## Response
 

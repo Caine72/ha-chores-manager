@@ -254,6 +254,10 @@ def _build_current_week_history(
         "child_name": store.data["children"][child_id]["name"],
         "points_entity_id": points_entity_id,
         **history,
+        "activities": [
+            {"activity_id": activity_id, **activity}
+            for activity_id, activity in store.get_current_week_activities(child_id)
+        ],
     }
     if person_entity_id := store.data["children"][child_id].get("person_entity_id"):
         result["person_entity_id"] = person_entity_id
@@ -385,6 +389,8 @@ async def websocket_adjust_weekly_points(
             msg[ATTR_CHILD_ID],
             msg[ATTR_AMOUNT],
             msg.get(ATTR_REASON),
+            connection.user.id,
+            connection.user.name,
         )
     except UnknownChildError:
         connection.send_error(
@@ -409,7 +415,6 @@ async def websocket_adjust_weekly_points(
 
 
 @callback
-@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): WS_TYPE_INVENTORY})
 def websocket_inventory(
     hass: HomeAssistant,
@@ -431,7 +436,6 @@ def websocket_inventory(
 
 
 @callback
-@websocket_api.require_admin
 @websocket_api.websocket_command(
     {vol.Required("type"): WS_TYPE_CURRENT_WEEK_COMPLETIONS}
 )
@@ -457,7 +461,6 @@ def websocket_current_week_completions(
     )
 
 
-@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): WS_TYPE_SET_CURRENT_WEEK_COMPLETION,
@@ -501,6 +504,8 @@ async def websocket_set_current_week_completion(
             msg[ATTR_ASSIGNMENT_ID],
             local_date,
             msg["completed"],
+            connection.user.id,
+            connection.user.name,
         )
     except CorrectionDateOutsideCurrentWeekError:
         connection.send_error(

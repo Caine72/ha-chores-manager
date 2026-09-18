@@ -96,6 +96,21 @@ class AdjustmentData(TypedDict):
     reason: NotRequired[str]
 
 
+class ActivityData(TypedDict):
+    """Stored point-affecting activity."""
+
+    occurred_at: str
+    local_date: str
+    action: str
+    child_id: str | None
+    chore_id: str | None
+    assignment_id: str | None
+    points_delta: int
+    actor_user_id: str | None
+    actor_name: str
+    reason: NotRequired[str]
+
+
 class ChoresManagerData(TypedDict):
     """Stored Chores Manager data."""
 
@@ -104,12 +119,14 @@ class ChoresManagerData(TypedDict):
     next_assignment_id: int
     next_completion_id: int
     next_adjustment_id: int
+    next_activity_id: int
 
     children: dict[str, ChildData]
     chores: dict[str, ChoreData]
     assignments: dict[str, AssignmentData]
     completions: dict[str, CompletionData]
     adjustments: dict[str, AdjustmentData]
+    activities: dict[str, ActivityData]
     label_initialized_assignment_ids: NotRequired[list[str]]
 
 
@@ -121,11 +138,13 @@ def create_empty_data() -> ChoresManagerData:
         "next_assignment_id": 1,
         "next_completion_id": 1,
         "next_adjustment_id": 1,
+        "next_activity_id": 1,
         "children": {},
         "chores": {},
         "assignments": {},
         "completions": {},
         "adjustments": {},
+        "activities": {},
         "label_initialized_assignment_ids": [],
     }
 
@@ -176,10 +195,21 @@ class ChoresManagerStore:
             self.data["adjustments"] = {}
             data_changed = True
 
+        if "next_activity_id" not in self.data:
+            self.data["next_activity_id"] = 1
+            data_changed = True
+
+        if "activities" not in self.data:
+            self.data["activities"] = {}
+            data_changed = True
+
         if self._prune_old_completions(dt_util.now().date()):
             data_changed = True
 
         if self._prune_old_adjustments(dt_util.now().date()):
+            data_changed = True
+
+        if self._prune_old_activities(dt_util.now().date()):
             data_changed = True
 
         if data_changed:
@@ -195,7 +225,8 @@ class ChoresManagerStore:
         async with self._lock:
             completions_pruned = self._prune_old_completions(now.date())
             adjustments_pruned = self._prune_old_adjustments(now.date())
-            if completions_pruned or adjustments_pruned:
+            activities_pruned = self._prune_old_activities(now.date())
+            if completions_pruned or adjustments_pruned or activities_pruned:
                 await self.async_save()
                 return
 
@@ -212,7 +243,8 @@ class ChoresManagerStore:
             self._reset_after_weekday = weekday
             completions_pruned = self._prune_old_completions(dt_util.now().date())
             adjustments_pruned = self._prune_old_adjustments(dt_util.now().date())
-            if completions_pruned or adjustments_pruned:
+            activities_pruned = self._prune_old_activities(dt_util.now().date())
+            if completions_pruned or adjustments_pruned or activities_pruned:
                 await self.async_save()
                 return
 
@@ -692,6 +724,8 @@ class ChoresManagerStore:
         child_id: str,
         amount: int,
         reason: str | None = None,
+        actor_user_id: str | None = None,
+        actor_name: str | None = None,
     ) -> str | None:
         """Adjust a child's current weekly counter and return the adjustment ID."""
         async with self._lock:
@@ -712,13 +746,20 @@ class ChoresManagerStore:
                 child_id,
                 adjustment_points,
                 reason,
+                actor_user_id,
+                actor_name,
             )
 
             await self.async_save()
 
         return adjustment_id
 
-    async def async_complete_assignment(self, assignment_id: str) -> str:
+    async def async_complete_assignment(
+        self,
+        assignment_id: str,
+        actor_user_id: str | None = None,
+        actor_name: str | None = None,
+    ) -> str:
         """Complete an assignment for today."""
         async with self._lock:
             existing_completion_id = self._get_today_completion_id(assignment_id)
@@ -753,6 +794,15 @@ class ChoresManagerStore:
                 "points": chore["points"],
             }
             self.data["next_completion_id"] = completion_number + 1
+            self._record_activity(
+                action="completion_added",
+                child_id=assignment["child_id"],
+                chore_id=assignment["chore_id"],
+                assignment_id=assignment_id,
+                points_delta=chore["points"],
+                actor_user_id=actor_user_id,
+                actor_name=actor_name,
+            )
 
             await self.async_save()
 
@@ -826,6 +876,8 @@ class ChoresManagerStore:
         assignment_id: str,
         local_date: date,
         completed: bool,
+        actor_user_id: str | None = None,
+        actor_name: str | None = None,
     ) -> tuple[str | None, bool]:
         """Set an assignment completion for a date in the current chore week."""
         async with self._lock:
@@ -848,6 +900,17 @@ class ChoresManagerStore:
                     for completion_id in completion_ids
                 }
                 for completion_id in completion_ids:
+                    completion = self.data["completions"][completion_id]
+                    self._record_activity(
+                        action="completion_removed",
+                        child_id=completion["child_id"],
+                        chore_id=completion["chore_id"],
+                        assignment_id=completion["assignment_id"],
+                        points_delta=-completion["points"],
+                        actor_user_id=actor_user_id,
+                        actor_name=actor_name,
+                        local_date=local_date,
+                    )
                     del self.data["completions"][completion_id]
                 for child_id in child_ids:
                     if child_id is not None:
@@ -880,6 +943,16 @@ class ChoresManagerStore:
                 "points": chore["points"],
             }
             self.data["next_completion_id"] = completion_number + 1
+            self._record_activity(
+                action="completion_added",
+                child_id=assignment["child_id"],
+                chore_id=assignment["chore_id"],
+                assignment_id=assignment_id,
+                points_delta=chore["points"],
+                actor_user_id=actor_user_id,
+                actor_name=actor_name,
+                local_date=local_date,
+            )
 
             await self.async_save()
 
@@ -888,6 +961,8 @@ class ChoresManagerStore:
     async def async_uncomplete_assignment(
         self,
         assignment_id: str,
+        actor_user_id: str | None = None,
+        actor_name: str | None = None,
     ) -> bool:
         """Remove today's completion for an assignment."""
         async with self._lock:
@@ -904,6 +979,16 @@ class ChoresManagerStore:
                 for completion_id in completion_ids
             }
             for completion_id in completion_ids:
+                completion = self.data["completions"][completion_id]
+                self._record_activity(
+                    action="completion_removed",
+                    child_id=completion["child_id"],
+                    chore_id=completion["chore_id"],
+                    assignment_id=completion["assignment_id"],
+                    points_delta=-completion["points"],
+                    actor_user_id=actor_user_id,
+                    actor_name=actor_name,
+                )
                 del self.data["completions"][completion_id]
             for child_id in child_ids:
                 if child_id is not None:
@@ -1041,6 +1126,8 @@ class ChoresManagerStore:
         child_id: str,
         points: int,
         reason: str | None = None,
+        actor_user_id: str | None = None,
+        actor_name: str | None = None,
     ) -> str:
         """Store an adjustment while the caller holds the storage lock."""
         adjustment_number = self.data["next_adjustment_id"]
@@ -1056,6 +1143,16 @@ class ChoresManagerStore:
 
         self.data["adjustments"][adjustment_id] = adjustment
         self.data["next_adjustment_id"] = adjustment_number + 1
+        self._record_activity(
+            action="points_adjusted",
+            child_id=child_id,
+            chore_id=None,
+            assignment_id=None,
+            points_delta=points,
+            actor_user_id=actor_user_id,
+            actor_name=actor_name,
+            reason=reason,
+        )
         return adjustment_id
 
     def get_current_week_completions(
@@ -1106,6 +1203,65 @@ class ChoresManagerStore:
             del self.data["adjustments"][adjustment_id]
 
         return bool(adjustment_ids_to_remove)
+
+    def _prune_old_activities(self, reference_date: date) -> bool:
+        """Keep activity for the same rolling history window."""
+        retention_start = reference_date - timedelta(days=HISTORY_RETENTION_DAYS - 1)
+        activity_ids = [
+            activity_id
+            for activity_id, activity in self.data["activities"].items()
+            if date.fromisoformat(activity["local_date"]) < retention_start
+        ]
+        for activity_id in activity_ids:
+            del self.data["activities"][activity_id]
+        return bool(activity_ids)
+
+    def _record_activity(
+        self,
+        *,
+        action: str,
+        child_id: str | None,
+        chore_id: str | None,
+        assignment_id: str | None,
+        points_delta: int,
+        actor_user_id: str | None,
+        actor_name: str | None,
+        local_date: date | None = None,
+        reason: str | None = None,
+    ) -> str:
+        """Store an immutable point-affecting activity record."""
+        activity_id = f"activity_{self.data['next_activity_id']}"
+        activity: ActivityData = {
+            "occurred_at": dt_util.utcnow().isoformat(),
+            "local_date": (local_date or dt_util.now().date()).isoformat(),
+            "action": action,
+            "child_id": child_id,
+            "chore_id": chore_id,
+            "assignment_id": assignment_id,
+            "points_delta": points_delta,
+            "actor_user_id": actor_user_id,
+            "actor_name": actor_name or "System",
+        }
+        if reason:
+            activity["reason"] = reason
+        self.data["activities"][activity_id] = activity
+        self.data["next_activity_id"] += 1
+        return activity_id
+
+    def get_current_week_activities(
+        self, child_id: str
+    ) -> list[tuple[str, ActivityData]]:
+        """Return current-week point activity for one child."""
+        week_start, _ = self.get_current_week_bounds()
+        return sorted(
+            (
+                (activity_id, activity)
+                for activity_id, activity in self.data["activities"].items()
+                if activity["child_id"] == child_id
+                and date.fromisoformat(activity["local_date"]) >= week_start
+            ),
+            key=lambda item: (item[1]["occurred_at"], item[0]),
+        )
 
     def _create_assignment(
         self,
