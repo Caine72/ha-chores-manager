@@ -89,3 +89,7 @@ The command is idempotent. Its response reports the requested state, whether sto
 - permit correction of inactive but still-existing assignments;
 - reject new completions for deleted assignments, future dates, and dates before the current week start;
 - retain completion snapshots without rewriting their historical metadata.
+
+When a correction changes weekly points, the weekly-points sensor state preserves
+the authenticated WebSocket user's Home Assistant context. The native Activity page
+therefore shows who performed the correction.

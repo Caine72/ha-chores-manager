@@ -365,6 +365,7 @@ async def _async_handle_adjust_weekly_counter(
             call.data.get(ATTR_REASON),
             actor_user_id,
             actor.name if actor is not None else None,
+            call.context,
         )
     except UnknownChildError as err:
         raise ServiceValidationError(

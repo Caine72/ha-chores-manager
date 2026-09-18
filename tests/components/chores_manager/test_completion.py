@@ -398,6 +398,7 @@ async def test_adjustment_action_allows_non_admin_sensor_controller(
     )
 
     assert _state(hass, WEEKLY_POINTS_SENSOR).state == "1"
+    assert _state(hass, WEEKLY_POINTS_SENSOR).context.user_id == hass_read_only_user.id
 
 
 async def test_complete_assignment_updates_state_points_and_snapshot(

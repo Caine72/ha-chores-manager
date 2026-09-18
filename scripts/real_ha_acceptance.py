@@ -192,8 +192,9 @@ def exercise_non_admin_correction(
     base_url: str,
     admin_token: str,
     assignment_id: str,
+    points_entity_id: str,
     local_date: str,
-) -> str:
+) -> tuple[str | None, str]:
     """Exercise reversible correction access as a temporary non-admin user."""
     suffix = secrets.token_hex(6)
     username = f"chores-acceptance-{suffix}"
@@ -247,6 +248,15 @@ def exercise_non_admin_correction(
         )
         assert_true(result["changed"], "non-admin correction did not create completion")
         completion_id = result["completion_id"]
+        points_state = get_states(base_url=base_url, token=admin_token).get(
+            points_entity_id
+        )
+        assert_true(points_state is not None, "weekly-points sensor is missing")
+        assert_equal(
+            points_state["context"]["user_id"],
+            user_id,
+            "weekly-points state did not preserve the correcting user context",
+        )
         result = websocket_request(
             base_url=base_url,
             token=token,
@@ -258,6 +268,15 @@ def exercise_non_admin_correction(
             },
         )
         assert_true(result["changed"], "non-admin correction did not restore state")
+        points_state = get_states(base_url=base_url, token=admin_token).get(
+            points_entity_id
+        )
+        assert_true(points_state is not None, "weekly-points sensor is missing")
+        assert_equal(
+            points_state["context"]["user_id"],
+            user_id,
+            "restored weekly-points state did not preserve the correcting user context",
+        )
         return completion_id, user_id
     finally:
         if user_id is not None:
@@ -871,6 +890,7 @@ def run_acceptance(
         base_url=base_url,
         admin_token=token,
         assignment_id=alex_bed_assignment,
+        points_entity_id=alex_sensor,
         local_date=correction_date,
     )
     assert_true(

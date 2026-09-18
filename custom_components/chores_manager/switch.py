@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN, SwitchEntity
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .labels import async_initialize_assignment_label
@@ -54,7 +54,7 @@ async def async_setup_entry(
             async_add_entities(new_entities.values())
 
     @callback
-    def async_schedule_reconciliation() -> None:
+    def async_schedule_reconciliation(_context: Context | None) -> None:
         """Schedule assignment entity reconciliation."""
         entry.async_create_task(
             hass,
@@ -169,9 +169,10 @@ class ChoreAssignmentSwitch(SwitchEntity):
         )
 
         @callback
-        def async_write_state_if_present() -> None:
+        def async_write_state_if_present(context: Context | None) -> None:
             """Write state when the assignment still exists."""
             if self._assignment_id in self._store.data["assignments"]:
+                self.async_set_context(context or Context())
                 self.async_write_ha_state()
 
         self.async_on_remove(
@@ -188,6 +189,7 @@ class ChoreAssignmentSwitch(SwitchEntity):
             self._assignment_id,
             user_id,
             user.name if user else None,
+            self._context,
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -198,6 +200,7 @@ class ChoreAssignmentSwitch(SwitchEntity):
             self._assignment_id,
             user_id,
             user.name if user else None,
+            self._context,
         )
 
     @property

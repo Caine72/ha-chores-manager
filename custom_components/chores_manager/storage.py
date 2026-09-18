@@ -5,7 +5,7 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import NotRequired, TypedDict
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -37,7 +37,7 @@ from .exceptions import (
     UnknownChoresError,
 )
 
-type StoreListener = Callable[[], None]
+type StoreListener = Callable[[Context | None], None]
 _PERSON_ENTITY_UNCHANGED = object()
 
 
@@ -215,10 +215,10 @@ class ChoresManagerStore:
         if data_changed:
             await self.async_save()
 
-    async def async_save(self) -> None:
+    async def async_save(self, context: Context | None = None) -> None:
         """Persist the current data and notify listeners."""
         await self._store.async_save(self.data)
-        self._async_notify_listeners()
+        self._async_notify_listeners(context)
 
     async def async_handle_local_midnight(self, now: datetime) -> None:
         """Refresh date-bound state and prune at the chore-week boundary."""
@@ -230,7 +230,7 @@ class ChoresManagerStore:
                 await self.async_save()
                 return
 
-        self._async_notify_listeners()
+        self._async_notify_listeners(None)
 
     async def async_set_reset_after_weekday(self, weekday: str) -> None:
         """Apply a new reset weekday immediately using its latest occurrence."""
@@ -248,7 +248,7 @@ class ChoresManagerStore:
                 await self.async_save()
                 return
 
-        self._async_notify_listeners()
+        self._async_notify_listeners(None)
 
     @property
     def reset_after_weekday(self) -> str:
@@ -298,10 +298,10 @@ class ChoresManagerStore:
         return remove_listener
 
     @callback
-    def _async_notify_listeners(self) -> None:
+    def _async_notify_listeners(self, context: Context | None) -> None:
         """Notify registered listeners that data changed."""
         for listener in tuple(self._listeners):
-            listener()
+            listener(context)
 
     async def async_add_child(
         self,
@@ -726,6 +726,7 @@ class ChoresManagerStore:
         reason: str | None = None,
         actor_user_id: str | None = None,
         actor_name: str | None = None,
+        context: Context | None = None,
     ) -> str | None:
         """Adjust a child's current weekly counter and return the adjustment ID."""
         async with self._lock:
@@ -739,7 +740,7 @@ class ChoresManagerStore:
                 adjustment_points = -min(abs(amount), current_points)
                 if adjustment_points == 0:
                     if floor_changed:
-                        await self.async_save()
+                        await self.async_save(context)
                     return None
 
             adjustment_id = self._store_adjustment(
@@ -750,7 +751,7 @@ class ChoresManagerStore:
                 actor_name,
             )
 
-            await self.async_save()
+            await self.async_save(context)
 
         return adjustment_id
 
@@ -759,6 +760,7 @@ class ChoresManagerStore:
         assignment_id: str,
         actor_user_id: str | None = None,
         actor_name: str | None = None,
+        context: Context | None = None,
     ) -> str:
         """Complete an assignment for today."""
         async with self._lock:
@@ -804,7 +806,7 @@ class ChoresManagerStore:
                 actor_name=actor_name,
             )
 
-            await self.async_save()
+            await self.async_save(context)
 
         return completion_id
 
@@ -878,6 +880,7 @@ class ChoresManagerStore:
         completed: bool,
         actor_user_id: str | None = None,
         actor_name: str | None = None,
+        context: Context | None = None,
     ) -> tuple[str | None, bool]:
         """Set an assignment completion for a date in the current chore week."""
         async with self._lock:
@@ -916,7 +919,7 @@ class ChoresManagerStore:
                     if child_id is not None:
                         self._floor_current_week_points_at_zero(child_id)
 
-                await self.async_save()
+                await self.async_save(context)
                 return None, True
 
             if completion_ids:
@@ -954,7 +957,7 @@ class ChoresManagerStore:
                 local_date=local_date,
             )
 
-            await self.async_save()
+            await self.async_save(context)
 
         return completion_id, True
 
@@ -963,6 +966,7 @@ class ChoresManagerStore:
         assignment_id: str,
         actor_user_id: str | None = None,
         actor_name: str | None = None,
+        context: Context | None = None,
     ) -> bool:
         """Remove today's completion for an assignment."""
         async with self._lock:
@@ -994,7 +998,7 @@ class ChoresManagerStore:
                 if child_id is not None:
                     self._floor_current_week_points_at_zero(child_id)
 
-            await self.async_save()
+            await self.async_save(context)
 
         return True
 
