@@ -427,6 +427,117 @@ def write_html_report(
     output_html.write_text(html, encoding="utf-8")
 
 
+def run_correction_actor_acceptance(
+    *,
+    base_url: str,
+    token: str,
+    config_dir: Path,
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Exercise only non-admin correction access and Activity attribution."""
+    storage_path = config_dir / ".storage" / "chores_manager.data"
+    config_entries_path = config_dir / ".storage" / "core.config_entries"
+    run_stamp = utc_stamp()
+    output_json = output_dir / f"real_ha_acceptance_actor_context_{run_stamp}.json"
+    output_html = output_dir / f"real_ha_acceptance_actor_context_{run_stamp}.html"
+    child_name = f"Acceptance Actor {run_stamp}"
+    chore_title = f"Actor context chore {run_stamp}"
+    child_id: str | None = None
+    chore_id: str | None = None
+    entry_id: str | None = None
+
+    def storage_data() -> dict[str, Any]:
+        return read_json(storage_path)["data"]
+
+    def snapshot(step: str, sensor: str) -> dict[str, Any]:
+        data = storage_data()
+        state = get_states(base_url=base_url, token=token).get(sensor)
+        return {
+            "step": step,
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "states": {sensor: visible_state(state)},
+            "storage": {
+                "next_ids": {
+                    "child": data["next_child_id"],
+                    "chore": data["next_chore_id"],
+                    "assignment": data["next_assignment_id"],
+                    "completion": data["next_completion_id"],
+                }
+            },
+        }
+
+    try:
+        request_json(base_url=base_url, token=token, method="GET", path="/api/")
+        entries = read_json(config_entries_path)["data"]["entries"]
+        entry_id = next(
+            entry["entry_id"] for entry in entries if entry["domain"] == "chores_manager"
+        )
+        call_service(base_url=base_url, token=token, domain="homeassistant", service="reload_config_entry", data={"entry_id": entry_id})
+        time.sleep(2.0)
+        call_service(base_url=base_url, token=token, domain="chores_manager", service="add_child", data={"name": child_name})
+        data = storage_data()
+        child_id = next(candidate_id for candidate_id, child in data["children"].items() if child["name"] == child_name)
+        sensor = f"sensor.{child_id}_weekly_points"
+        call_service(
+            base_url=base_url,
+            token=token,
+            domain="chores_manager",
+            service="add_chore",
+            data={"title": chore_title, "category": "Acceptance", "points": 1, "icon": "mdi:account-check", "sort_order": 0, "child_ids": [child_id]},
+        )
+        data = storage_data()
+        chore_id = next(candidate_id for candidate_id, chore in data["chores"].items() if chore["title"] == chore_title)
+        assignment_id = next(
+            candidate_id
+            for candidate_id, assignment in data["assignments"].items()
+            if assignment["child_id"] == child_id and assignment["chore_id"] == chore_id
+        )
+        correction_history = websocket_request(base_url=base_url, token=token, payload={"type": "chores_manager/current_week_completions"})
+        completion_id, actor_user_id = exercise_non_admin_correction(
+            base_url=base_url,
+            admin_token=token,
+            assignment_id=assignment_id,
+            points_entity_id=sensor,
+            local_date=correction_history["window"]["end"],
+        )
+        assert_true(completion_id is not None, "current-week correction did not return a completion ID")
+        activities = [activity for activity in storage_data()["activities"].values() if activity["assignment_id"] == assignment_id and activity["actor_user_id"] == actor_user_id]
+        assert_true(
+            {activity["action"] for activity in activities} >= {"completion_added", "completion_removed"},
+            "correction Activity records did not preserve actor identity",
+        )
+        evidence = {
+            "run_stamp": run_stamp,
+            "scenario": "correction-actor",
+            "config_entry_id": entry_id,
+            "tracked_ids": {"child": child_id, "chore": chore_id, "assignment": assignment_id, "completion": completion_id},
+            "criteria": [{"criterion": "Non-admin correction preserves native Activity actor context", "result": "PASS", "evidence": "The temporary user's add and remove correction updates preserved its user context."}],
+            "snapshots": [snapshot("correction actor context", sensor)],
+            "output_json": str(output_json),
+            "output_html": str(output_html),
+        }
+    finally:
+        cleanup_errors: list[str] = []
+        for service, data in (("delete_chore", {"chore_id": chore_id}), ("delete_child", {"child_id": child_id})):
+            if next(iter(data.values())) is None:
+                continue
+            try:
+                call_service(base_url=base_url, token=token, domain="chores_manager", service=service, data=data)
+            except Exception as err:  # noqa: BLE001 - cleanup must attempt every resource.
+                cleanup_errors.append(f"{service}: {err}")
+        if entry_id is not None:
+            try:
+                call_service(base_url=base_url, token=token, domain="homeassistant", service="reload_config_entry", data={"entry_id": entry_id})
+            except Exception as err:  # noqa: BLE001 - cleanup must not leave it unloaded.
+                cleanup_errors.append(f"reload_config_entry: {err}")
+        if cleanup_errors:
+            raise AcceptanceFailure("Scenario cleanup failed: " + "; ".join(cleanup_errors))
+
+    output_json.write_text(json.dumps(evidence, indent=2, sort_keys=True), encoding="utf-8")
+    write_html_report(output_html=output_html, run_stamp=run_stamp, config_entry_id=entry_id, tracked_ids=evidence["tracked_ids"], criteria=evidence["criteria"], snapshots=evidence["snapshots"])
+    return evidence
+
+
 def run_acceptance(
     *,
     base_url: str,
@@ -1229,6 +1340,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--token", required=True, help="Long-lived Home Assistant access token")
     parser.add_argument("--config-dir", required=True, help="Home Assistant config directory path")
     parser.add_argument("--output-dir", default="/tmp", help="Directory for JSON/HTML artifacts")
+    parser.add_argument("--scenario", choices=("full", "correction-actor"), default="full", help="Acceptance scenario to run (default: full)")
+    parser.add_argument("--quiet", action="store_true", help="Print a one-line result instead of formatted JSON")
     parser.add_argument(
         "--keep-structure",
         action="store_true",
@@ -1246,31 +1359,43 @@ def main() -> int:
 
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
-        evidence = run_acceptance(
-            base_url=args.ha_url.rstrip("/"),
-            token=args.token,
-            config_dir=config_dir,
-            output_dir=output_dir,
-            keep_structure=args.keep_structure,
-        )
+        if args.scenario == "full":
+            evidence = run_acceptance(
+                base_url=args.ha_url.rstrip("/"),
+                token=args.token,
+                config_dir=config_dir,
+                output_dir=output_dir,
+                keep_structure=args.keep_structure,
+            )
+        else:
+            evidence = run_correction_actor_acceptance(
+                base_url=args.ha_url.rstrip("/"),
+                token=args.token,
+                config_dir=config_dir,
+                output_dir=output_dir,
+            )
     except Exception as err:
         failure = {
             "error": type(err).__name__,
             "message": str(err),
             "failed_at": datetime.now(timezone.utc).isoformat(),
         }
-        print(json.dumps(failure, indent=2))
+        print(json.dumps(failure) if args.quiet else json.dumps(failure, indent=2))
         return 1
 
     summary = {
         "result": "PASS",
+        "scenario": args.scenario,
         "run_stamp": evidence["run_stamp"],
         "config_entry_id": evidence["config_entry_id"],
         "tracked_ids": evidence["tracked_ids"],
         "json_artifact": evidence["output_json"],
         "html_artifact": evidence["output_html"],
     }
-    print(json.dumps(summary, indent=2))
+    if args.quiet:
+        print(f"PASS scenario={args.scenario} run_stamp={evidence['run_stamp']}")
+    else:
+        print(json.dumps(summary, indent=2))
     return 0
 
 

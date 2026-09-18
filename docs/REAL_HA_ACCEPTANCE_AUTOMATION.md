@@ -30,6 +30,9 @@ Optional flags:
 
 ```zsh
 ./scripts/run-real-ha-acceptance --keep-structure
+
+# Run only the non-admin correction and native Activity attribution scenario.
+./scripts/run-real-ha-acceptance --scenario correction-actor --quiet
 ```
 
 ## Output
@@ -43,7 +46,7 @@ Artifacts are written to `HA_ACCEPTANCE_OUTPUT_DIR`.
 
 ## Notes
 
-- The workflow intentionally mutates live chores_manager structure unless `--keep-structure` is used.
+- The full workflow intentionally mutates live chores_manager structure unless `--keep-structure` is used. The `correction-actor` scenario creates and removes only its own child and chore.
 - The runner uses the Home Assistant development environment's `aiohttp` installation to create a temporary non-admin user, exercise the authenticated WebSocket correction contract, and remove the credentials and user afterward.
 - It verifies current-week correction history, add/remove correction behavior, live switch state, weekly-points updates, and user context on corrected weekly-points state.
 - Local-midnight refresh, configured weekday rollover, and retention remain covered by automated pytest in `tests/components/chores_manager/test_midnight.py`.

@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+AREA=""
+FULL=false
+
+function usage() {
+  cat <<'EOF'
+Usage: ./scripts/verify-change --area <area> [--full]
+
+Areas:
+  points    Weekly points, corrections, and point attribution
+  all       Entire integration test suite
+
+Options:
+  --full    Run canonical validation once after focused tests
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --area)
+      AREA="${2:-}"
+      shift 2
+      ;;
+    --full)
+      FULL=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "${AREA}" ]]; then
+  echo "--area is required" >&2
+  usage >&2
+  exit 2
+fi
+
+case "${AREA}" in
+  points)
+    ./scripts/run-tests \
+      tests/components/chores_manager/test_completion.py \
+      tests/components/chores_manager/test_websocket_api.py
+    ;;
+  all)
+    ./scripts/run-tests
+    ;;
+  *)
+    echo "Unsupported area: ${AREA}" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
+if [[ "${FULL}" == true ]]; then
+  ./scripts/validate
+fi
+
+git diff --check
+echo "PASS area=${AREA} full=${FULL}"
