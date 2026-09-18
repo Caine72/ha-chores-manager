@@ -409,7 +409,6 @@ async def websocket_adjust_weekly_points(
 
 
 @callback
-@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): WS_TYPE_INVENTORY})
 def websocket_inventory(
     hass: HomeAssistant,
@@ -431,7 +430,6 @@ def websocket_inventory(
 
 
 @callback
-@websocket_api.require_admin
 @websocket_api.websocket_command(
     {vol.Required("type"): WS_TYPE_CURRENT_WEEK_COMPLETIONS}
 )
@@ -457,7 +455,6 @@ def websocket_current_week_completions(
     )
 
 
-@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): WS_TYPE_SET_CURRENT_WEEK_COMPLETION,

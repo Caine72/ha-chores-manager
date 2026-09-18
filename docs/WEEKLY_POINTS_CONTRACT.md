@@ -1,7 +1,7 @@
 # Weekly points WebSocket contract
 
 The weekly-points API lets cards read retained totals and make audited current-week
-adjustments without granting structural administration or correction access.
+adjustments using the same authenticated-user access model as correction.
 
 ## Read totals
 
@@ -68,5 +68,5 @@ point delta, and optional reason. Completion history is not rewritten.
 Adjustment visibility is a frontend presentation rule. Hiding the control does not
 prevent an authenticated Home Assistant user from calling the adjustment command
 directly. Reading weekly totals still requires `read` permission for the resolved
-weekly-points entity. Inventory and correction commands keep their separate
-administrator-only policies.
+weekly-points entity. Inventory and correction commands are likewise available to
+authenticated users.

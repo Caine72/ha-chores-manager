@@ -1,6 +1,6 @@
 # Chores Manager correction history contract
 
-The correction history contract supports the administrator card in the separate Chores Manager Cards repository. This backend does not source, depend on, or package that card.
+The correction history contract supports the correction card in the separate Chores Manager Cards repository. This backend does not source, depend on, or package that card.
 
 ## Current-week boundary
 
@@ -18,7 +18,7 @@ these boundaries and validation.
 
 ## Read transport
 
-Use the admin-only Home Assistant WebSocket command:
+Use the authenticated Home Assistant WebSocket command:
 
 ```json
 {
@@ -58,7 +58,7 @@ Call chores_manager/inventory separately for current children, chores, assignmen
 
 ## Mutation transport
 
-Use the admin-only Home Assistant WebSocket command:
+Use the authenticated Home Assistant WebSocket command:
 
 ```json
 {

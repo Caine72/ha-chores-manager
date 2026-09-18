@@ -42,9 +42,14 @@ async def _call_action(
 async def _get_inventory(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
+    access_token: str | None = None,
 ) -> dict[str, Any]:
     """Fetch Chores Manager inventory over WebSocket."""
-    client = await hass_ws_client(hass)
+    client = (
+        await hass_ws_client(hass)
+        if access_token is None
+        else await hass_ws_client(hass, access_token)
+    )
     await client.send_json_auto_id({"type": WS_TYPE_INVENTORY})
     return await client.receive_json()
 
@@ -52,9 +57,14 @@ async def _get_inventory(
 async def _get_current_week_completions(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
+    access_token: str | None = None,
 ) -> dict[str, Any]:
     """Fetch current-week correction history over WebSocket."""
-    client = await hass_ws_client(hass)
+    client = (
+        await hass_ws_client(hass)
+        if access_token is None
+        else await hass_ws_client(hass, access_token)
+    )
     await client.send_json_auto_id({"type": WS_TYPE_CURRENT_WEEK_COMPLETIONS})
     return await client.receive_json()
 
@@ -214,9 +224,14 @@ async def _set_current_week_completion(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
     data: dict[str, object],
+    access_token: str | None = None,
 ) -> dict[str, Any]:
     """Correct a current-week completion over WebSocket."""
-    client = await hass_ws_client(hass)
+    client = (
+        await hass_ws_client(hass)
+        if access_token is None
+        else await hass_ws_client(hass, access_token)
+    )
     await client.send_json_auto_id(
         {"type": WS_TYPE_SET_CURRENT_WEEK_COMPLETION, **data}
     )
@@ -961,26 +976,37 @@ async def test_set_current_week_completion_rejects_invalid_date(
     assert loaded_config_entry.runtime_data.data["completions"] == {}
 
 
-@pytest.mark.usefixtures("loaded_config_entry")
-async def test_set_current_week_completion_requires_admin(
+async def test_set_current_week_completion_allows_authenticated_non_admin(
     hass: HomeAssistant,
+    loaded_config_entry: MockConfigEntry,
     hass_ws_client: WebSocketGenerator,
     hass_read_only_access_token: str,
 ) -> None:
-    """Test correction mutation rejects non-admin users."""
-    client = await hass_ws_client(hass, hass_read_only_access_token)
-    await client.send_json_auto_id(
+    """Test an authenticated non-admin can correct a completion."""
+    await _call_action(hass, "add_child", {"name": "Alex"})
+    await _call_action(
+        hass,
+        "add_chore",
         {
-            "type": WS_TYPE_SET_CURRENT_WEEK_COMPLETION,
+            "title": "Make the bed",
+            "category": "Morning",
+            "points": 2,
+        },
+    )
+    response = await _set_current_week_completion(
+        hass,
+        hass_ws_client,
+        {
             "assignment_id": "assignment_1",
             "local_date": dt_util.now().date().isoformat(),
             "completed": True,
-        }
+        },
+        hass_read_only_access_token,
     )
-    response = await client.receive_json()
 
-    assert not response["success"]
-    assert response["error"]["code"] == "unauthorized"
+    assert response["success"]
+    assert response["result"]["changed"] is True
+    assert "completion_1" in loaded_config_entry.runtime_data.data["completions"]
 
 
 async def test_inventory_requires_loaded_entry(
@@ -1000,30 +1026,26 @@ async def test_inventory_requires_loaded_entry(
 
 
 @pytest.mark.usefixtures("loaded_config_entry")
-async def test_inventory_requires_admin(
+async def test_inventory_allows_authenticated_non_admin(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
     hass_read_only_access_token: str,
 ) -> None:
-    """Test inventory rejects non-admin users."""
-    client = await hass_ws_client(hass, hass_read_only_access_token)
-    await client.send_json_auto_id({"type": WS_TYPE_INVENTORY})
-    response = await client.receive_json()
+    """Test an authenticated non-admin can read inventory."""
+    response = await _get_inventory(hass, hass_ws_client, hass_read_only_access_token)
 
-    assert not response["success"]
-    assert response["error"]["code"] == "unauthorized"
+    assert response["success"]
 
 
 @pytest.mark.usefixtures("loaded_config_entry")
-async def test_current_week_completions_requires_admin(
+async def test_current_week_completions_allows_authenticated_non_admin(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
     hass_read_only_access_token: str,
 ) -> None:
-    """Test correction history rejects non-admin users."""
-    client = await hass_ws_client(hass, hass_read_only_access_token)
-    await client.send_json_auto_id({"type": WS_TYPE_CURRENT_WEEK_COMPLETIONS})
-    response = await client.receive_json()
+    """Test an authenticated non-admin can read correction history."""
+    response = await _get_current_week_completions(
+        hass, hass_ws_client, hass_read_only_access_token
+    )
 
-    assert not response["success"]
-    assert response["error"]["code"] == "unauthorized"
+    assert response["success"]
