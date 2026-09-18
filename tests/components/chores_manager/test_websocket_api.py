@@ -151,6 +151,7 @@ async def test_current_week_history_allows_sensor_reader_and_scopes_child(
         "child_name": "Alex",
         "person_entity_id": "person.alex",
         "points_entity_id": POINTS_SENSOR,
+        "activities": [],
         "window": {
             "start": week_start.isoformat(),
             "end": today.isoformat(),
@@ -390,6 +391,11 @@ async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
         loaded_config_entry.runtime_data.data["adjustments"]["adjustment_1"]["reason"]
         == "Bonus"
     )
+    activity = loaded_config_entry.runtime_data.data["activities"]["activity_1"]
+    assert activity["action"] == "points_adjusted"
+    assert activity["points_delta"] == 3
+    assert activity["actor_user_id"] == hass_read_only_user.id
+    assert activity["actor_name"] == hass_read_only_user.name
 
 
 async def test_adjust_weekly_points_allows_authenticated_user_without_entity_permission(
@@ -980,6 +986,7 @@ async def test_set_current_week_completion_allows_authenticated_non_admin(
     hass: HomeAssistant,
     loaded_config_entry: MockConfigEntry,
     hass_ws_client: WebSocketGenerator,
+    hass_read_only_user: MockUser,
     hass_read_only_access_token: str,
 ) -> None:
     """Test an authenticated non-admin can correct a completion."""
@@ -1007,6 +1014,10 @@ async def test_set_current_week_completion_allows_authenticated_non_admin(
     assert response["success"]
     assert response["result"]["changed"] is True
     assert "completion_1" in loaded_config_entry.runtime_data.data["completions"]
+    activity = loaded_config_entry.runtime_data.data["activities"]["activity_1"]
+    assert activity["action"] == "completion_added"
+    assert activity["actor_user_id"] == hass_read_only_user.id
+    assert activity["actor_name"] == hass_read_only_user.name
 
 
 async def test_inventory_requires_loaded_entry(

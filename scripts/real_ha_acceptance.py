@@ -147,7 +147,7 @@ def websocket_request(
 
 async def _async_login_homeassistant(
     *, base_url: str, username: str, password: str
-) -> str:
+) -> tuple[str, str]:
     """Authenticate local credentials through Home Assistant's normal login flow."""
     client_id = "http://localhost/"
     async with ClientSession() as session:
@@ -188,7 +188,11 @@ async def _async_login_homeassistant(
 
 
 def exercise_non_admin_correction(
-    *, base_url: str, admin_token: str, assignment_id: str, local_date: str
+    *,
+    base_url: str,
+    admin_token: str,
+    assignment_id: str,
+    local_date: str,
 ) -> str:
     """Exercise reversible correction access as a temporary non-admin user."""
     suffix = secrets.token_hex(6)
@@ -254,7 +258,7 @@ def exercise_non_admin_correction(
             },
         )
         assert_true(result["changed"], "non-admin correction did not restore state")
-        return completion_id
+        return completion_id, user_id
     finally:
         if user_id is not None:
             try:
@@ -863,7 +867,7 @@ def run_acceptance(
         payload={"type": "chores_manager/current_week_completions"},
     )
     correction_date = correction_history["window"]["end"]
-    correction_completion_id = exercise_non_admin_correction(
+    correction_completion_id, correction_actor_user_id = exercise_non_admin_correction(
         base_url=base_url,
         admin_token=token,
         assignment_id=alex_bed_assignment,
@@ -874,6 +878,17 @@ def run_acceptance(
         "current-week correction did not return a completion ID",
     )
     tracked_ids["correction_completion"] = correction_completion_id
+    correction_activities = [
+        activity
+        for activity in storage_data()["activities"].values()
+        if activity["assignment_id"] == alex_bed_assignment
+        and activity["actor_user_id"] == correction_actor_user_id
+    ]
+    assert_true(
+        {activity["action"] for activity in correction_activities}
+        >= {"completion_added", "completion_removed"},
+        "non-admin correction activity did not preserve actor identity",
+    )
     wait_until(
         "non-admin correction restoration updates",
         lambda: get_states(base_url=base_url, token=token)

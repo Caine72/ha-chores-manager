@@ -39,6 +39,21 @@ names are not authorization boundaries.
       "category": "Cat",
       "points": 1
     }
+  ],
+  "activities": [
+    {
+      "activity_id": "activity_1",
+      "occurred_at": "2026-08-22T09:00:00+00:00",
+      "local_date": "2026-08-22",
+      "action": "points_adjusted",
+      "child_id": "kid_1",
+      "chore_id": null,
+      "assignment_id": null,
+      "points_delta": 2,
+      "actor_user_id": "home-assistant-user-id",
+      "actor_name": "Parent",
+      "reason": "Bonus"
+    }
   ]
 }
 ```
@@ -46,8 +61,11 @@ names are not authorization boundaries.
 The window starts at the backend-configured current week boundary and ends today in
 Home Assistant local time. Completions are scoped to the requested stable child ID and
 sorted by local date then stable completion ID. Immutable snapshots remain readable
-when their assignment was later deleted. Manual point adjustments are excluded because
-this contract describes completed chores rather than the total's audit ledger.
+when their assignment was later deleted. Manual point adjustments are excluded from
+`completions`, but appear in the immutable `activities` ledger together with completion
+additions and removals. Activity records preserve the Home Assistant user ID and display
+name supplied by the authenticated context; actions without a user context are attributed
+to `System`.
 
 Consumers must render the returned dates and snapshots and must not calculate a fixed
 reset weekday or parse display text as business data.
