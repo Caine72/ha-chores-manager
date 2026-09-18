@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .models import ChoresManagerConfigEntry
@@ -43,7 +43,7 @@ async def async_setup_entry(
             async_add_entities(new_entities.values())
 
     @callback
-    def async_schedule_reconciliation() -> None:
+    def async_schedule_reconciliation(_context: Context | None) -> None:
         """Schedule child entity reconciliation."""
         entry.async_create_task(
             hass,
@@ -110,9 +110,10 @@ class ChildWeeklyPointsSensor(SensorEntity):
         await super().async_added_to_hass()
 
         @callback
-        def async_write_state_if_present() -> None:
+        def async_write_state_if_present(context: Context | None) -> None:
             """Write state when the child still exists."""
             if self._child_id in self._store.data["children"]:
+                self.async_set_context(context or Context())
                 self.async_write_ha_state()
 
         self.async_on_remove(

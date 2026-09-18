@@ -384,6 +384,7 @@ async def websocket_adjust_weekly_points(
 
     previous_total = store.get_current_week_points(msg[ATTR_CHILD_ID])
 
+    context = connection.context(msg)
     try:
         adjustment_id = await store.async_adjust_weekly_counter(
             msg[ATTR_CHILD_ID],
@@ -391,6 +392,7 @@ async def websocket_adjust_weekly_points(
             msg.get(ATTR_REASON),
             connection.user.id,
             connection.user.name,
+            context,
         )
     except UnknownChildError:
         connection.send_error(
@@ -486,6 +488,7 @@ async def websocket_set_current_week_completion(
         )
         return
 
+    context = connection.context(msg)
     try:
         local_date = date.fromisoformat(msg["local_date"])
     except ValueError:
@@ -506,6 +509,7 @@ async def websocket_set_current_week_completion(
             msg["completed"],
             connection.user.id,
             connection.user.name,
+            context,
         )
     except CorrectionDateOutsideCurrentWeekError:
         connection.send_error(

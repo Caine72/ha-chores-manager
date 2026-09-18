@@ -18,6 +18,7 @@ Development is AI-assisted.
 - Choose which weekday ends the chore week.
 - Correct current-week completions without rewriting older history.
 - Make audited point adjustments that never reduce a total below zero.
+- Attribute user-originated weekly-point changes in Home Assistant Activity.
 - Optionally associate a child with a Home Assistant Person for card portraits.
 - Preserve stable identity when children or chores are renamed.
 

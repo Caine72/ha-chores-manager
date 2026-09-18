@@ -62,6 +62,9 @@ when decrementing a zero total.
 
 Every applied change is stored as an adjustment with timestamp, local date, child,
 point delta, and optional reason. Completion history is not rewritten.
+User-originated changes preserve the Home Assistant request context on the updated
+weekly-points sensor state, so the native Activity page identifies the acting user.
+Changes without a user context remain system-originated.
 
 ## Authentication and visibility
 

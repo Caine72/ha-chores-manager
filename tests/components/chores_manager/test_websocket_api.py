@@ -396,6 +396,9 @@ async def test_adjust_weekly_points_allows_non_admin_sensor_controller(
     assert activity["points_delta"] == 3
     assert activity["actor_user_id"] == hass_read_only_user.id
     assert activity["actor_name"] == hass_read_only_user.name
+    points_state = hass.states.get(POINTS_SENSOR)
+    assert points_state is not None
+    assert points_state.context.user_id == hass_read_only_user.id
 
 
 async def test_adjust_weekly_points_allows_authenticated_user_without_entity_permission(
@@ -1018,6 +1021,9 @@ async def test_set_current_week_completion_allows_authenticated_non_admin(
     assert activity["action"] == "completion_added"
     assert activity["actor_user_id"] == hass_read_only_user.id
     assert activity["actor_name"] == hass_read_only_user.name
+    points_state = hass.states.get(POINTS_SENSOR)
+    assert points_state is not None
+    assert points_state.context.user_id == hass_read_only_user.id
 
 
 async def test_inventory_requires_loaded_entry(
