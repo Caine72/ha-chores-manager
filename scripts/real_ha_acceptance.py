@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import json
 import sqlite3
+import secrets
 import time
 import urllib.error
 import urllib.request
@@ -142,6 +143,139 @@ def websocket_request(
             payload=payload,
         )
     )
+
+
+async def _async_login_homeassistant(
+    *, base_url: str, username: str, password: str
+) -> tuple[str, str]:
+    """Authenticate local credentials through Home Assistant's normal login flow."""
+    client_id = "http://localhost/"
+    async with ClientSession() as session:
+        response = await session.post(
+            f"{base_url}/auth/login_flow",
+            json={
+                "client_id": client_id,
+                "handler": ["homeassistant", None],
+                "redirect_uri": client_id,
+            },
+        )
+        step = await response.json()
+        assert_equal(response.status, 200, "non-admin login flow creation failed")
+        response = await session.post(
+            f"{base_url}/auth/login_flow/{step['flow_id']}",
+            json={
+                "client_id": client_id,
+                "username": username,
+                "password": password,
+            },
+        )
+        result = await response.json()
+        assert_true(
+            response.status == 200 and result.get("type") == "create_entry",
+            f"non-admin login failed: {result!r}",
+        )
+        response = await session.post(
+            f"{base_url}/auth/token",
+            data={
+                "client_id": client_id,
+                "grant_type": "authorization_code",
+                "code": result["result"],
+            },
+        )
+        tokens = await response.json()
+        assert_equal(response.status, 200, "non-admin token exchange failed")
+        return tokens["access_token"]
+
+
+def exercise_non_admin_correction(
+    *,
+    base_url: str,
+    admin_token: str,
+    assignment_id: str,
+    local_date: str,
+) -> str:
+    """Exercise reversible correction access as a temporary non-admin user."""
+    suffix = secrets.token_hex(6)
+    username = f"chores-acceptance-{suffix}"
+    password = secrets.token_urlsafe(24)
+    user_id: str | None = None
+    completion_id: str | None = None
+    try:
+        created = websocket_request(
+            base_url=base_url,
+            token=admin_token,
+            payload={
+                "type": "config/auth/create",
+                "name": "Chores Manager acceptance non-admin",
+            },
+        )
+        user_id = created["user"]["id"]
+        websocket_request(
+            base_url=base_url,
+            token=admin_token,
+            payload={
+                "type": "config/auth_provider/homeassistant/create",
+                "user_id": user_id,
+                "username": username,
+                "password": password,
+            },
+        )
+        token = asyncio.run(
+            _async_login_homeassistant(
+                base_url=base_url, username=username, password=password
+            )
+        )
+        websocket_request(
+            base_url=base_url,
+            token=token,
+            payload={"type": "chores_manager/inventory"},
+        )
+        websocket_request(
+            base_url=base_url,
+            token=token,
+            payload={"type": "chores_manager/current_week_completions"},
+        )
+        result = websocket_request(
+            base_url=base_url,
+            token=token,
+            payload={
+                "type": "chores_manager/set_current_week_completion",
+                "assignment_id": assignment_id,
+                "local_date": local_date,
+                "completed": True,
+            },
+        )
+        assert_true(result["changed"], "non-admin correction did not create completion")
+        completion_id = result["completion_id"]
+        result = websocket_request(
+            base_url=base_url,
+            token=token,
+            payload={
+                "type": "chores_manager/set_current_week_completion",
+                "assignment_id": assignment_id,
+                "local_date": local_date,
+                "completed": False,
+            },
+        )
+        assert_true(result["changed"], "non-admin correction did not restore state")
+        return completion_id, user_id
+    finally:
+        if user_id is not None:
+            try:
+                websocket_request(
+                    base_url=base_url,
+                    token=admin_token,
+                    payload={
+                        "type": "config/auth_provider/homeassistant/delete",
+                        "username": username,
+                    },
+                )
+            finally:
+                websocket_request(
+                    base_url=base_url,
+                    token=admin_token,
+                    payload={"type": "config/auth/delete", "user_id": user_id},
+                )
 
 
 def get_states(*, base_url: str, token: str) -> dict[str, dict[str, Any]]:
@@ -733,67 +867,30 @@ def run_acceptance(
         payload={"type": "chores_manager/current_week_completions"},
     )
     correction_date = correction_history["window"]["end"]
-    correction_result = websocket_request(
+    correction_completion_id, correction_actor_user_id = exercise_non_admin_correction(
         base_url=base_url,
-        token=token,
-        payload={
-            "type": "chores_manager/set_current_week_completion",
-            "assignment_id": alex_bed_assignment,
-            "local_date": correction_date,
-            "completed": True,
-        },
+        admin_token=token,
+        assignment_id=alex_bed_assignment,
+        local_date=correction_date,
     )
-    assert_true(
-        correction_result["changed"],
-        "current-week correction did not create a completion",
-    )
-    correction_completion_id = correction_result["completion_id"]
     assert_true(
         correction_completion_id is not None,
         "current-week correction did not return a completion ID",
     )
     tracked_ids["correction_completion"] = correction_completion_id
-    wait_until(
-        "correction completion entity updates",
-        lambda: get_states(base_url=base_url, token=token)
-        .get(alex_bed_switch, {})
-        .get("state")
-        == "on"
-        and get_states(base_url=base_url, token=token)
-        .get(alex_sensor, {})
-        .get("state")
-        == "2",
-    )
-    correction_history = websocket_request(
-        base_url=base_url,
-        token=token,
-        payload={"type": "chores_manager/current_week_completions"},
-    )
+    correction_activities = [
+        activity
+        for activity in storage_data()["activities"].values()
+        if activity["assignment_id"] == alex_bed_assignment
+        and activity["actor_user_id"] == correction_actor_user_id
+    ]
     assert_true(
-        any(
-            completion["completion_id"] == correction_completion_id
-            and completion["assignment_id"] == alex_bed_assignment
-            and completion["local_date"] == correction_date
-            for completion in correction_history["completions"]
-        ),
-        "current-week correction history did not return the new completion",
-    )
-    correction_result = websocket_request(
-        base_url=base_url,
-        token=token,
-        payload={
-            "type": "chores_manager/set_current_week_completion",
-            "assignment_id": alex_bed_assignment,
-            "local_date": correction_date,
-            "completed": False,
-        },
-    )
-    assert_true(
-        correction_result["changed"],
-        "current-week correction did not remove the completion",
+        {activity["action"] for activity in correction_activities}
+        >= {"completion_added", "completion_removed"},
+        "non-admin correction activity did not preserve actor identity",
     )
     wait_until(
-        "correction removal entity updates",
+        "non-admin correction restoration updates",
         lambda: get_states(base_url=base_url, token=token)
         .get(alex_bed_switch, {})
         .get("state")
@@ -804,7 +901,7 @@ def run_acceptance(
         == "0",
     )
     snapshots.append(
-        snapshot("current-week completion correction", tracked_entity_ids, tracked_ids)
+        snapshot("non-admin current-week correction", tracked_entity_ids, tracked_ids)
     )
 
     call_service(
@@ -1044,9 +1141,9 @@ def run_acceptance(
             "evidence": "Two Blake relationships were added, removed from storage/state/registry, and recreated with newer stable IDs.",
         },
         {
-            "criterion": "Admin current-week correction is live and reversible",
+            "criterion": "Authenticated non-admin correction is live and reversible",
             "result": "PASS",
-            "evidence": "WebSocket history and correction commands created and removed an Alex-bed completion while switch state and weekly points updated.",
+            "evidence": "A temporary non-admin user read inventory/history and created then removed an Alex-bed completion; credentials and user were deleted afterward.",
         },
         {
             "criterion": "Delete removes targeted live structure/entities only",

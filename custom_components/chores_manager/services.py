@@ -351,12 +351,20 @@ async def _async_handle_adjust_weekly_counter(
     """Handle a weekly-counter adjustment action."""
     entry = _get_loaded_entry(hass)
     await _async_require_points_control(hass, call, call.data[ATTR_CHILD_ID])
+    actor_user_id = call.context.user_id
+    actor = (
+        await hass.auth.async_get_user(actor_user_id)
+        if actor_user_id is not None
+        else None
+    )
 
     try:
         await entry.runtime_data.async_adjust_weekly_counter(
             call.data[ATTR_CHILD_ID],
             call.data[ATTR_AMOUNT] * multiplier,
             call.data.get(ATTR_REASON),
+            actor_user_id,
+            actor.name if actor is not None else None,
         )
     except UnknownChildError as err:
         raise ServiceValidationError(

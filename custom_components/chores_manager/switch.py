@@ -182,11 +182,23 @@ class ChoreAssignmentSwitch(SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Mark the chore completed today."""
-        await self._store.async_complete_assignment(self._assignment_id)
+        user_id = self._context.user_id
+        user = await self.hass.auth.async_get_user(user_id) if user_id else None
+        await self._store.async_complete_assignment(
+            self._assignment_id,
+            user_id,
+            user.name if user else None,
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Remove today's chore completion."""
-        await self._store.async_uncomplete_assignment(self._assignment_id)
+        user_id = self._context.user_id
+        user = await self.hass.auth.async_get_user(user_id) if user_id else None
+        await self._store.async_uncomplete_assignment(
+            self._assignment_id,
+            user_id,
+            user.name if user else None,
+        )
 
     @property
     def _assignment(self):
