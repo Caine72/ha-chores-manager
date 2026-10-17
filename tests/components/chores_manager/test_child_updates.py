@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 import pytest
-import voluptuous as vol
+import probatio as vol
 
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_RESTORED, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant, State

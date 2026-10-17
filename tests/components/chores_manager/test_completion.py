@@ -3,7 +3,7 @@
 from datetime import datetime
 
 import pytest
-import voluptuous as vol
+import probatio as vol
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID
