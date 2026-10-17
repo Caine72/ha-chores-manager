@@ -3,7 +3,7 @@
 from datetime import date, timedelta
 from typing import Any, cast
 
-import voluptuous as vol
+import probatio
 
 from homeassistant.auth.permissions.const import POLICY_READ
 from homeassistant.components import websocket_api
@@ -23,6 +23,8 @@ from .exceptions import (
 )
 from .models import ChoresManagerConfigEntry
 from .storage import ChoresManagerStore
+
+vol = probatio
 
 WS_TYPE_INVENTORY = f"{DOMAIN}/inventory"
 WS_TYPE_CURRENT_WEEK_COMPLETIONS = f"{DOMAIN}/current_week_completions"

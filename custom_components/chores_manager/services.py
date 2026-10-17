@@ -3,7 +3,7 @@
 from functools import partial
 from typing import cast
 
-import voluptuous as vol
+import probatio
 
 from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -72,6 +72,8 @@ from .exceptions import (
 )
 from .models import ChoresManagerConfigEntry
 
+vol = probatio
+
 ADJUST_WEEKLY_COUNTER_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_CHILD_ID): vol.All(
@@ -114,7 +116,7 @@ ASSIGN_CHORES_TO_CHILD_SCHEMA = vol.Schema(
             vol.Length(min=1),
         ),
         vol.Required(ATTR_CHORE_IDS): vol.All(
-            cv.ensure_list,
+            vol.EnsureList(),
             [
                 vol.All(
                     cv.string,
@@ -189,7 +191,7 @@ ADD_CHORE_SCHEMA = vol.Schema(
             default=COMPLETION_MODE_INDEPENDENT,
         ): vol.In(COMPLETION_MODES),
         vol.Optional(ATTR_CHILD_IDS): vol.All(
-            cv.ensure_list,
+            vol.EnsureList(),
             [
                 vol.All(
                     cv.string,
