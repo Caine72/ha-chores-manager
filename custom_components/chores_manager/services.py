@@ -3,7 +3,7 @@
 from functools import partial
 from typing import cast
 
-import probatio as vol
+import probatio
 
 from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -13,7 +13,6 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError, Unauthorized, UnknownUser
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.typing import ConfigType
-
 from .const import (
     ATTR_ACTIVE,
     ATTR_AMOUNT,
@@ -71,6 +70,8 @@ from .exceptions import (
     UnknownChoresError,
 )
 from .models import ChoresManagerConfigEntry
+
+vol = probatio
 
 ADJUST_WEEKLY_COUNTER_SCHEMA = vol.Schema(
     {

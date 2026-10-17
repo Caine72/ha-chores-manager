@@ -3,7 +3,7 @@
 from datetime import date, timedelta
 from typing import Any, cast
 
-import probatio as vol
+import probatio
 
 from homeassistant.auth.permissions.const import POLICY_READ
 from homeassistant.components import websocket_api
@@ -14,7 +14,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
-
 from .const import ATTR_AMOUNT, ATTR_ASSIGNMENT_ID, ATTR_CHILD_ID, ATTR_REASON, DOMAIN
 from .exceptions import (
     CorrectionDateOutsideCurrentWeekError,
@@ -23,6 +22,8 @@ from .exceptions import (
 )
 from .models import ChoresManagerConfigEntry
 from .storage import ChoresManagerStore
+
+vol = probatio
 
 WS_TYPE_INVENTORY = f"{DOMAIN}/inventory"
 WS_TYPE_CURRENT_WEEK_COMPLETIONS = f"{DOMAIN}/current_week_completions"

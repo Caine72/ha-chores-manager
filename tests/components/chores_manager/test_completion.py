@@ -2,8 +2,8 @@
 
 from datetime import datetime
 
+import probatio
 import pytest
-import probatio as vol
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID
@@ -14,6 +14,8 @@ from homeassistant.util import dt as dt_util
 from .common import DOMAIN
 
 from tests.common import MockConfigEntry, MockUser
+
+vol = probatio
 
 CHORE_SWITCH = "switch.kid_1_chore_1"
 WEEKLY_POINTS_SENSOR = "sensor.kid_1_weekly_points"

@@ -2,14 +2,13 @@
 
 from typing import Any, cast
 
-import probatio as vol
+import probatio
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry, ConfigFlowResult, OptionsFlow
 from homeassistant.data_entry_flow import SectionConfig, section
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import selector
-
 from .const import (
     ATTR_ACTIVE,
     ATTR_ASSIGNMENT_ID,
@@ -47,6 +46,8 @@ from .const import (
     WEEKDAY_NAMES,
 )
 from .models import ChoresManagerConfigEntry
+
+vol = probatio
 
 ADVANCED_CHORE_OPTIONS = "advanced_chore_options"
 WEEKDAY_LABELS = {weekday: weekday.capitalize() for weekday in WEEKDAY_NAMES}

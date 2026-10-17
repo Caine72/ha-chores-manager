@@ -2,8 +2,8 @@
 
 from unittest.mock import patch
 
+import probatio
 import pytest
-import probatio as vol
 
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_RESTORED, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant, State
@@ -13,6 +13,8 @@ from homeassistant.helpers import entity_registry as er
 from .common import DOMAIN
 
 from tests.common import MockConfigEntry
+
+vol = probatio
 
 ALEX_POINTS = "sensor.kid_1_weekly_points"
 ISABELLE_POINTS = "sensor.kid_2_weekly_points"
