@@ -160,6 +160,25 @@ jobs:
               for old, new in replacements.items():
                   source = source.replace(old, new)
               path.write_text(source, encoding="utf-8")
+
+          conftest = Path("tests/components/chores_manager/conftest.py")
+          conftest.write_text(
+              conftest.read_text(encoding="utf-8")
+              + '''
+
+          @pytest.fixture
+          def ignore_missing_translations(request: pytest.FixtureRequest) -> list[str]:
+              """Ignore core-only translations exercised by this harness."""
+              if request.node.name == "test_adjust_weekly_counter_rejects_unknown_child":
+                  return ["component.homeassistant.exceptions.service_not_found.message"]
+              return [
+                  "component.switch.services.toggle.",
+                  "component.switch.services.turn_off.",
+                  "component.switch.services.turn_on.",
+              ]
+          ''',
+              encoding="utf-8",
+          )
           PY
           . .venv/bin/activate
           pytest -q --asyncio-mode=auto tests/components/chores_manager
