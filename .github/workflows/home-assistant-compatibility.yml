@@ -8,8 +8,7 @@ on:
 permissions:
   contents: read
 
-env:
-  ACTIONS_CACHE_MODE: read-only
+cache-mode: read
 
 concurrency:
   group: home-assistant-compatibility
