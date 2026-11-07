@@ -8,8 +8,6 @@ on:
 permissions:
   contents: read
 
-cache-mode: read
-
 concurrency:
   group: home-assistant-compatibility
   cancel-in-progress: true
@@ -106,6 +104,7 @@ jobs:
     name: Core ${{ matrix.channel }} (${{ matrix.ref }})
     needs: resolve-releases
     runs-on: ubuntu-latest
+    cache-mode: none
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.resolve-releases.outputs.matrix) }}
