@@ -31,6 +31,8 @@ jobs:
           import os
           import re
           import sys
+          from urllib.error import HTTPError, URLError
+          from urllib.request import urlopen
 
           releases = json.load(open(sys.argv[1], encoding="utf-8"))
           releases = [release for release in releases if not release["draft"]]
@@ -49,6 +51,29 @@ jobs:
               return int(year), int(month), int(patch), int(beta_number or -1)
 
           stable_version = version(stable["tag_name"])
+
+          def is_published_to_pypi(tag):
+              try:
+                  with urlopen(
+                      f"https://pypi.org/pypi/homeassistant/{tag}/json",
+                      timeout=10,
+                  ) as response:
+                      return response.status == 200
+              except HTTPError as error:
+                  if error.code == 404:
+                      return False
+                  raise
+              except URLError as error:
+                  raise SystemExit(
+                      f"Could not verify whether Home Assistant {tag} is on PyPI: "
+                      f"{error.reason}"
+                  ) from error
+
+          if not is_published_to_pypi(stable["tag_name"]):
+              raise SystemExit(
+                  f"Latest stable Home Assistant release {stable['tag_name']} is not on PyPI"
+              )
+
           beta = next(
               (
                   release
@@ -59,8 +84,12 @@ jobs:
               None,
           )
           include = [{"channel": "stable", "ref": stable["tag_name"]}]
-          if beta is not None:
+          if beta is not None and is_published_to_pypi(beta["tag_name"]):
               include.append({"channel": "beta", "ref": beta["tag_name"]})
+          elif beta is not None:
+              print(
+                  f"Skipping Home Assistant beta {beta['tag_name']}: it is not published to PyPI"
+              )
 
           matrix = json.dumps({"include": include}, separators=(",", ":"))
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
@@ -75,6 +104,7 @@ jobs:
     name: Core ${{ matrix.channel }} (${{ matrix.ref }})
     needs: resolve-releases
     runs-on: ubuntu-latest
+    cache-mode: none
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.resolve-releases.outputs.matrix) }}
@@ -83,6 +113,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: integration
+          persist-credentials: false
+
+      - name: Check out Home Assistant Core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: home-assistant/core
+          ref: ${{ matrix.ref }}
+          path: core
           persist-credentials: false
 
       - name: Set up Python
@@ -96,35 +134,51 @@ jobs:
           enable-cache: false
 
       - name: Install compatibility test environment
-        working-directory: integration
-        env:
-          HA_VERSION: ${{ matrix.ref }}
+        working-directory: core
         run: |
           uv venv .venv --python "${pythonLocation}/bin/python"
           . .venv/bin/activate
-          uv pip install \
-            "homeassistant==${HA_VERSION}" \
-            pytest-homeassistant-custom-component
+          uv pip install -r requirements.txt
+          uv pip install -r requirements_all.txt -r requirements_test.txt
+          uv pip install -e . -e packages/pytest-homeassistant
 
       - name: Run full backend test suite
-        working-directory: integration
+        working-directory: core
         run: |
-          . .venv/bin/activate
+          mkdir -p custom_components
+          cp -a ../integration/custom_components/chores_manager custom_components/
+          cp -a ../integration/tests/components/chores_manager tests/components/
           python - <<'PY'
           from pathlib import Path
 
           replacements = {
-              "from tests.common import": (
-                  "from pytest_homeassistant_custom_component.common import"
-              ),
-              "from tests.typing import": (
-                  "from pytest_homeassistant_custom_component.typing import"
-              ),
+              "from tests.common import": "from pytest_homeassistant.common import",
+              "from tests.typing import": "from pytest_homeassistant.typing import",
           }
-          for path in Path("tests").rglob("*.py"):
+          for path in Path("tests/components/chores_manager").glob("*.py"):
               source = path.read_text(encoding="utf-8")
               for old, new in replacements.items():
                   source = source.replace(old, new)
               path.write_text(source, encoding="utf-8")
+
+          conftest = Path("tests/components/chores_manager/conftest.py")
+          conftest.write_text(
+              conftest.read_text(encoding="utf-8")
+              + '''
+
+          @pytest.fixture
+          def ignore_missing_translations(request: pytest.FixtureRequest) -> list[str]:
+              """Ignore core-only translations exercised by this harness."""
+              if request.node.name == "test_adjust_weekly_counter_rejects_unknown_child":
+                  return ["component.homeassistant.exceptions.service_not_found.message"]
+              return [
+                  "component.switch.services.toggle.",
+                  "component.switch.services.turn_off.",
+                  "component.switch.services.turn_on.",
+              ]
+          ''',
+              encoding="utf-8",
+          )
           PY
+          . .venv/bin/activate
           pytest -q --asyncio-mode=auto tests/components/chores_manager
