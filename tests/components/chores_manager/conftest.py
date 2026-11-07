@@ -19,6 +19,18 @@ def auto_enable_custom_integrations(
 
 
 @pytest.fixture
+def ignore_missing_translations(request: pytest.FixtureRequest) -> list[str]:
+    """Ignore core-only translations exercised by the compatibility suite."""
+    if request.node.name == "test_adjust_weekly_counter_rejects_unknown_child":
+        return ["component.homeassistant.exceptions.service_not_found.message"]
+    return [
+        "component.switch.services.toggle.",
+        "component.switch.services.turn_off.",
+        "component.switch.services.turn_on.",
+    ]
+
+
+@pytest.fixture
 def hass_config_dir(hass_tmp_config_dir: str) -> str:
     """Expose Chores Manager in the temporary Home Assistant config."""
     config_dir = Path(hass_tmp_config_dir)

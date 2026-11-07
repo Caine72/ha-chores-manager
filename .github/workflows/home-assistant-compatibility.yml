@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  ACTIONS_CACHE_MODE: read-only
+
 concurrency:
   group: home-assistant-compatibility
   cancel-in-progress: true
