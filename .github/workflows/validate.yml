@@ -33,7 +33,7 @@ jobs:
 
   validate-tests:
     name: Project validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       HA_CORE_REF: "2026.10.2"
     steps:
